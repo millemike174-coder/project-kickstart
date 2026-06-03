@@ -94,25 +94,18 @@ export default function Hero() {
 
           {/* "Trenches" — solo entrata morbida (no rotazioni infinite) */}
           <motion.span
-            initial={{ opacity: 0, y: 40, scale: 0.85, filter: 'blur(12px)' }}
-            animate={{
-              opacity: 1,
-              y: 0,
-              scale: 1,
-              filter: 'blur(0px)',
-            }}
+            initial={{ opacity: 0, rotateY: -180, scale: 0.7 }}
+            animate={{ opacity: 1, rotateY: 0, scale: 1 }}
             transition={{
-              duration: 1.4,
+              duration: 1.6,
               ease: [0.19, 1, 0.22, 1],
               delay: 0.85,
             }}
-            className="inline-block normal-case"
             style={{
-              fontFamily: "'Instrument Serif', serif",
-              fontStyle: 'italic',
-              fontWeight: 400,
               color: '#E8DCC8',
-              letterSpacing: '-0.01em',
+              transformStyle: 'preserve-3d',
+              transformOrigin: 'center center',
+              display: 'inline-block',
             }}
           >
             Trenches
