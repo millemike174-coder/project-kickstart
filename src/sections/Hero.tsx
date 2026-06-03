@@ -5,9 +5,7 @@ const openBooking = () => {
   window.dispatchEvent(new Event('open-booking'));
 };
 
-import heroVideo from '../../public/videos/hero.mp4.asset.json';
-
-const VIDEO_SRC = heroVideo.url;
+const VIDEO_SRC = '/videos/hero.mp4';
 
 export default function Hero() {
   return (
