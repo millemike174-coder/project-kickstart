@@ -92,7 +92,7 @@ export default function Hero() {
             transition={{ duration: 1.2, ease: [0.19, 1, 0.22, 1], delay: 0.25 }}
             className="inline-block"
           >
-            Diamo voce alle{' '}
+            {'Diamo voce alle\u00A0'}
           </motion.span>
 
           {/* "Trenches" — solo entrata morbida (no rotazioni infinite) */}
