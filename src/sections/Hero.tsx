@@ -10,6 +10,7 @@ const VIDEO_SRC = '/videos/hero.mp4';
 
 export default function Hero() {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
     const v = videoRef.current;
