@@ -1,3 +1,4 @@
+import { useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowUpRight } from 'lucide-react';
 
@@ -8,6 +9,20 @@ const openBooking = () => {
 const VIDEO_SRC = '/videos/hero.mp4';
 
 export default function Hero() {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = true;
+    v.playsInline = true;
+    const tryPlay = () => v.play().catch(() => { /* silently ignore */ });
+    tryPlay();
+    const onInteract = () => { tryPlay(); document.removeEventListener('pointerdown', onInteract); };
+    document.addEventListener('pointerdown', onInteract);
+    return () => document.removeEventListener('pointerdown', onInteract);
+  }, []);
+
   return (
     <section
       id="top"
@@ -16,10 +31,12 @@ export default function Hero() {
     >
       {/* VIDEO BACKGROUND */}
       <video
+        ref={videoRef}
         autoPlay
         muted
         loop
         playsInline
+        preload="auto"
         poster="/studio/ssg-1.jpg"
         className="absolute inset-0 w-full h-full object-cover z-0"
       >
