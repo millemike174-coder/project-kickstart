@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowUpRight } from 'lucide-react';
 
@@ -10,7 +10,6 @@ const VIDEO_SRC = '/videos/hero.mp4';
 
 export default function Hero() {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
     const v = videoRef.current;
@@ -31,14 +30,7 @@ export default function Hero() {
       style={{ minHeight: '100vh' }}
     >
       {/* VIDEO BACKGROUND */}
-      <div
-        className="absolute inset-0 z-0 overflow-hidden bg-[#0A0908]"
-        style={{
-          backgroundImage: "url('/studio/ssg-1.jpg')",
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-        }}
-      >
+      <div className="absolute inset-0 z-0 overflow-hidden bg-[#0A0908]">
         <video
           ref={videoRef}
           autoPlay
@@ -46,13 +38,12 @@ export default function Hero() {
           loop
           playsInline
           preload="auto"
-          poster="/studio/ssg-1.jpg"
-          onPlaying={() => setPlaying(true)}
-          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${playing ? 'opacity-100' : 'opacity-0'}`}
+          className="absolute inset-0 w-full h-full object-cover"
         >
           <source src={VIDEO_SRC} type="video/mp4" />
         </video>
       </div>
+
 
 
       {/* Overlay scuro per leggibilità */}
