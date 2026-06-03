@@ -31,18 +31,29 @@ export default function Hero() {
       style={{ minHeight: '100vh' }}
     >
       {/* VIDEO BACKGROUND */}
-      <video
-        ref={videoRef}
-        autoPlay
-        muted
-        loop
-        playsInline
-        preload="auto"
-        poster="/studio/ssg-1.jpg"
-        className="absolute inset-0 w-full h-full object-cover z-0"
+      <div
+        className="absolute inset-0 z-0 overflow-hidden bg-[#0A0908]"
+        style={{
+          backgroundImage: "url('/studio/ssg-1.jpg')",
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+        }}
       >
-        <source src={VIDEO_SRC} type="video/mp4" />
-      </video>
+        <video
+          ref={videoRef}
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="auto"
+          poster="/studio/ssg-1.jpg"
+          onPlaying={() => setPlaying(true)}
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${playing ? 'opacity-100' : 'opacity-0'}`}
+        >
+          <source src={VIDEO_SRC} type="video/mp4" />
+        </video>
+      </div>
+
 
       {/* Overlay scuro per leggibilità */}
       <div
