@@ -5,10 +5,9 @@ const openBooking = () => {
   window.dispatchEvent(new Event('open-booking'));
 };
 
-// Video del sito originale. Per usarne uno tuo, scarica il file in /public/videos/hero.mp4
-// e cambia VIDEO_SRC a '/videos/hero.mp4'
-const VIDEO_SRC =
-  'https://6a1daa909d336f4ef7f92994--deluxe-moxie-3024e3.netlify.app/videos/video-hero.mp4';
+import heroVideo from '../../public/videos/hero.mp4.asset.json';
+
+const VIDEO_SRC = heroVideo.url;
 
 export default function Hero() {
   return (
