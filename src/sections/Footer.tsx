@@ -36,7 +36,7 @@ export default function Footer() {
                 {'action' in l ? (
                   <button
                     type="button"
-                    onClick={() => window.dispatchEvent(new Event(l.action))}
+                    onClick={() => window.dispatchEvent(new Event(l.action!))}
                     className="text-sm text-[#F5F1E8]/75 hover:text-[#E8DCC8] transition-colors"
                   >
                     {l.label}
