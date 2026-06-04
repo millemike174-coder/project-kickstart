@@ -14,7 +14,87 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      bookings: {
+        Row: {
+          addons: string[]
+          created_at: string
+          date: string
+          deposit_paid: boolean
+          email: string | null
+          end_time: string
+          final_paid: boolean
+          id: string
+          start_time: string
+          status: string
+          studio: string
+          total: number
+          vfx_ai_seconds: number
+          videomaker: boolean
+          videomaker_days: number
+        }
+        Insert: {
+          addons?: string[]
+          created_at?: string
+          date: string
+          deposit_paid?: boolean
+          email?: string | null
+          end_time: string
+          final_paid?: boolean
+          id?: string
+          start_time: string
+          status?: string
+          studio: string
+          total?: number
+          vfx_ai_seconds?: number
+          videomaker?: boolean
+          videomaker_days?: number
+        }
+        Update: {
+          addons?: string[]
+          created_at?: string
+          date?: string
+          deposit_paid?: boolean
+          email?: string | null
+          end_time?: string
+          final_paid?: boolean
+          id?: string
+          start_time?: string
+          status?: string
+          studio?: string
+          total?: number
+          vfx_ai_seconds?: number
+          videomaker?: boolean
+          videomaker_days?: number
+        }
+        Relationships: []
+      }
+      studio_blocks: {
+        Row: {
+          created_at: string
+          end_date: string
+          id: string
+          reason: string | null
+          start_date: string
+          studio: string
+        }
+        Insert: {
+          created_at?: string
+          end_date: string
+          id?: string
+          reason?: string | null
+          start_date: string
+          studio: string
+        }
+        Update: {
+          created_at?: string
+          end_date?: string
+          id?: string
+          reason?: string | null
+          start_date?: string
+          studio?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
