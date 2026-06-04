@@ -11,28 +11,37 @@ export default function AdminLogin() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session?.user && isAdminEmail(data.session.user.email)) {
-        navigate('/admin/dashboard', { replace: true });
-      }
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (data.session?.user && isAdminEmail(data.session.user.email)) {
+          navigate('/admin/dashboard', { replace: true });
+        }
+      })
+      .catch((error) => console.error('Admin login session error', error));
   }, [navigate]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (error || !data.user) {
-      toast.error('Credenziali non valide');
-      return;
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error || !data.user) {
+        toast.error('Credenziali non valide');
+        return;
+      }
+      if (!isAdminEmail(data.user.email)) {
+        await supabase.auth.signOut();
+        toast.error('Account non autorizzato');
+        return;
+      }
+      navigate('/admin/dashboard', { replace: true });
+    } catch (error) {
+      console.error('Admin login error', error);
+      toast.error('Errore accesso admin');
+    } finally {
+      setLoading(false);
     }
-    if (!isAdminEmail(data.user.email)) {
-      await supabase.auth.signOut();
-      toast.error('Account non autorizzato');
-      return;
-    }
-    navigate('/admin/dashboard', { replace: true });
   };
 
   return (
