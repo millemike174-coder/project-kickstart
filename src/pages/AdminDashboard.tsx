@@ -119,7 +119,8 @@ export default function AdminDashboard() {
 
   const togglePaid = async (b: Booking, field: 'deposit_paid' | 'final_paid') => {
     const next = !b[field];
-    const { error } = await supabase.from('bookings').update({ [field]: next }).eq('id', b.id);
+    const patch = { [field]: next } as any;
+    const { error } = await supabase.from('bookings').update(patch).eq('id', b.id);
     if (error) return toast.error('Errore aggiornamento');
     setBookings((prev) => prev.map((x) => (x.id === b.id ? { ...x, [field]: next } : x)));
   };
