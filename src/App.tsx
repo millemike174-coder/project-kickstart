@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import Header from './sections/Header';
 import Hero from './sections/Hero';
@@ -36,8 +36,10 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/admin/login)" element={<Navigate to="/admin/login" replace />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/admin/studios" element={<StudioAvailability />} />
+        <Route path="*" element={<Landing />} />
       </Routes>
     </BrowserRouter>
   );
