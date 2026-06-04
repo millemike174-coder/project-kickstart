@@ -19,8 +19,20 @@ const STUDIOS: { id: 'ssg' | 'piccolo'; name: string }[] = [
 ];
 
 function formatDateIT(d: string) {
+  if (!d || !d.includes('-')) return d || '—';
   const [y, m, dd] = d.split('-');
   return `${dd}/${m}/${y}`;
+}
+
+function normalizeBlock(row: Record<string, unknown>): Block {
+  return {
+    id: String(row.id ?? crypto.randomUUID()),
+    studio: row.studio === 'ssg' ? 'ssg' : 'piccolo',
+    start_date: String(row.start_date ?? ''),
+    end_date: String(row.end_date ?? ''),
+    reason: typeof row.reason === 'string' ? row.reason : null,
+    created_at: String(row.created_at ?? ''),
+  };
 }
 
 export default function StudioAvailability() {
@@ -31,17 +43,31 @@ export default function StudioAvailability() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [reason, setReason] = useState('');
+  const [dataError, setDataError] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const load = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('studio_blocks')
-      .select('*')
-      .order('start_date', { ascending: true });
-    if (error) toast.error('Errore caricamento');
-    setBlocks((data ?? []) as Block[]);
-    setLoading(false);
+    setDataError(null);
+    try {
+      const { data, error } = await supabase
+        .from('studio_blocks')
+        .select('*')
+        .order('start_date', { ascending: true });
+      if (error) {
+        setDataError('Disponibilità non disponibile al momento.');
+        toast.error('Errore caricamento');
+        setBlocks([]);
+        return;
+      }
+      setBlocks((data ?? []).map((row) => normalizeBlock(row as Record<string, unknown>)));
+    } catch (error) {
+      console.error('Studio availability load error', error);
+      setDataError('Disponibilità non disponibile al momento.');
+      setBlocks([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -151,6 +177,8 @@ export default function StudioAvailability() {
             );
           })}
         </div>
+
+        {dataError && <div className="mb-3 text-xs text-red-300/90">{dataError}</div>}
 
         <div className="rounded-2xl border border-white/10 overflow-hidden">
           <div className="px-5 py-3 border-b border-white/10 text-[10px] uppercase tracking-widest text-[#E8DCC8]">
