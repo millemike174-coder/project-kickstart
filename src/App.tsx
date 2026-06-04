@@ -29,6 +29,7 @@ function Landing() {
   );
 }
 
+// Routes: /, /admin/login, /admin/dashboard, /admin/studios
 export default function App() {
   return (
     <BrowserRouter>
