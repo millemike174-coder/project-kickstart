@@ -1,54 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
-import { X, ArrowRight, Check, AlertCircle } from 'lucide-react';
+import { X, ArrowRight, Check, AlertCircle, Video, Lock } from 'lucide-react';
+import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
-// ─── CONFIGURAZIONE PAGAMENTO ────────────────────────────────────────────
-// Sostituire con il Stripe Payment Link reale quando creato.
-// Esempio: https://buy.stripe.com/test_aBc123def456
+// ─── CONFIGURAZIONE PAGAMENTO ─────────────────────────────────
 const PAYMENT_URL = 'https://buy.stripe.com/PLACEHOLDER';
 
-// ─── STORAGE DELLE PRENOTAZIONI ──────────────────────────────────────────
-// Per ora salviamo localmente nel browser (localStorage). Funziona come demo
-// ma NON previene conflitti tra dispositivi diversi.
-// Per produzione: sostituire le funzioni saveBooking / loadBookings con
-// chiamate ad un backend (Supabase, Firebase, ecc.).
-const STORAGE_KEY = 'trenches_bookings_v1';
-
-type StoredBooking = {
-  studio: StudioId;
-  date: string; // YYYY-MM-DD
-  start: string; // HH:MM
-  end: string; // HH:MM
-  total: number;
-  createdAt: string; // ISO
-};
-
-function loadBookings(): StoredBooking[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as StoredBooking[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveBooking(b: StoredBooking) {
-  try {
-    const all = loadBookings();
-    all.push(b);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
-  } catch {
-    // ignore
-  }
-}
-
-// converte "HH:MM" in minuti dal mezzanotte
 const toMinutes = (t: string) => {
   if (!t) return 0;
   const [h, m] = t.split(':').map(Number);
   return h * 60 + m;
 };
 
-// due intervalli si sovrappongono se start < otherEnd && end > otherStart
 const overlaps = (
   startA: string,
   endA: string,
@@ -61,8 +24,6 @@ const overlaps = (
   const bE = toMinutes(endB);
   return aS < bE && aE > bS;
 };
-
-// ─── DATI ─────────────────────────────────────────────────────────────────
 
 type StudioId = 'piccolo' | 'ssg';
 
@@ -88,6 +49,7 @@ const ADDONS: Addon[] = [
 type Props = {
   open: boolean;
   onClose: () => void;
+  initialVideomaker?: boolean;
 };
 
 function formatDateIT(d: string) {
@@ -107,19 +69,51 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-export default function BookingModal({ open, onClose }: Props) {
+// videomaker pricing
+function videomakerPrice(days: number, vfxSeconds: number) {
+  if (days <= 0) return 0;
+  const base = 800 + Math.max(0, days - 1) * 400;
+  const vfx = vfxSeconds > 0 ? 200 : 0;
+  return base + vfx;
+}
+
+type BlockRow = {
+  start_date: string;
+  end_date: string;
+  reason: string | null;
+};
+
+type BusyRow = {
+  start_time: string;
+  end_time: string;
+};
+
+export default function BookingModal({ open, onClose, initialVideomaker = false }: Props) {
   const [studio, setStudio] = useState<StudioId>('piccolo');
   const [date, setDate] = useState('');
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
   const [addons, setAddons] = useState<string[]>([]);
+  const [email, setEmail] = useState('');
   const [step, setStep] = useState<'form' | 'confirm'>('form');
-  // Force re-render quando una prenotazione viene salvata
-  const [bookingsVersion, setBookingsVersion] = useState(0);
+
+  // Videomaker
+  const [videomaker, setVideomaker] = useState(initialVideomaker);
+  const [vmDays, setVmDays] = useState(1);
+  const [vfxOn, setVfxOn] = useState(false);
+  const [vfxSec, setVfxSec] = useState(4);
+
+  // From DB
+  const [busySlots, setBusySlots] = useState<BusyRow[]>([]);
+  const [blocks, setBlocks] = useState<BlockRow[]>([]);
+  const [submitting, setSubmitting] = useState(false);
 
   const today = new Date().toISOString().split('T')[0];
 
-  // ESC chiude + blocca scroll body quando aperto
+  useEffect(() => {
+    if (open) setVideomaker(initialVideomaker);
+  }, [open, initialVideomaker]);
+
   useEffect(() => {
     if (!open) return;
     const handleEsc = (e: KeyboardEvent) => {
@@ -133,7 +127,6 @@ export default function BookingModal({ open, onClose }: Props) {
     };
   }, [open, onClose]);
 
-  // Reset stato quando si chiude
   useEffect(() => {
     if (!open) {
       const t = setTimeout(() => setStep('form'), 200);
@@ -141,14 +134,37 @@ export default function BookingModal({ open, onClose }: Props) {
     }
   }, [open]);
 
-  // Carica le prenotazioni di questo studio per la data scelta
-  const busySlotsForDay = useMemo(() => {
-    if (!date) return [];
-    void bookingsVersion;
-    return loadBookings()
-      .filter((b) => b.studio === studio && b.date === date)
-      .sort((a, b) => toMinutes(a.start) - toMinutes(b.start));
-  }, [studio, date, bookingsVersion]);
+  // Fetch busy slots + blocks when studio/date changes
+  useEffect(() => {
+    if (!open || !date) {
+      setBusySlots([]);
+      setBlocks([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const [bookingsRes, blocksRes] = await Promise.all([
+        supabase
+          .from('bookings')
+          .select('start_time,end_time')
+          .eq('studio', studio)
+          .eq('date', date)
+          .eq('status', 'confirmed'),
+        supabase
+          .from('studio_blocks')
+          .select('start_date,end_date,reason')
+          .eq('studio', studio)
+          .lte('start_date', date)
+          .gte('end_date', date),
+      ]);
+      if (cancelled) return;
+      setBusySlots((bookingsRes.data ?? []) as BusyRow[]);
+      setBlocks((blocksRes.data ?? []) as BlockRow[]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, studio, date]);
 
   if (!open) return null;
 
@@ -158,27 +174,29 @@ export default function BookingModal({ open, onClose }: Props) {
     if (!startTime || !endTime) return 0;
     return (toMinutes(endTime) - toMinutes(startTime)) / 60;
   };
-
   const hours = Math.max(0, computeHours());
   const studioTotal = hours * currentStudio.rate;
   const addonsTotal = addons.reduce((sum, id) => {
     const a = ADDONS.find((x) => x.id === id);
     return sum + (a ? a.rate * hours : 0);
   }, 0);
-  const total = studioTotal + addonsTotal;
+  const vmTotal = videomaker ? videomakerPrice(vmDays, vfxOn ? vfxSec : 0) : 0;
+  const total = studioTotal + addonsTotal + vmTotal;
 
   const validHours = hours >= 2;
 
-  // Conflict check
   const hasConflict =
     !!date && !!startTime && !!endTime && validHours
-      ? busySlotsForDay.some((b) =>
-          overlaps(startTime, endTime, b.start, b.end)
+      ? busySlots.some((b) =>
+          overlaps(startTime, endTime, b.start_time.slice(0, 5), b.end_time.slice(0, 5))
         )
       : false;
 
+  const isBlocked = blocks.length > 0;
+  const blockReason = blocks[0]?.reason ?? '';
+
   const validForm =
-    !!date && !!startTime && !!endTime && validHours && !hasConflict;
+    !!date && !!startTime && !!endTime && validHours && !hasConflict && !isBlocked;
 
   const toggleAddon = (id: string) =>
     setAddons((prev) =>
@@ -190,19 +208,28 @@ export default function BookingModal({ open, onClose }: Props) {
     setStep('confirm');
   };
 
-  const handlePayment = () => {
-    // Salviamo localmente la prenotazione (demo)
-    saveBooking({
+  const handlePayment = async () => {
+    setSubmitting(true);
+    const { error } = await supabase.from('bookings').insert({
       studio,
       date,
-      start: startTime,
-      end: endTime,
+      start_time: startTime,
+      end_time: endTime,
       total,
-      createdAt: new Date().toISOString(),
+      addons,
+      email: email || null,
+      status: 'confirmed',
+      videomaker,
+      videomaker_days: videomaker ? vmDays : 0,
+      vfx_ai_seconds: videomaker && vfxOn ? vfxSec : 0,
     });
-    setBookingsVersion((v) => v + 1);
+    setSubmitting(false);
+    if (error) {
+      toast.error('Errore salvataggio prenotazione');
+      return;
+    }
+    toast.success('Prenotazione salvata');
 
-    // Costruisci URL Stripe con i parametri della prenotazione
     const params = new URLSearchParams({
       studio: currentStudio.name,
       date,
@@ -212,8 +239,7 @@ export default function BookingModal({ open, onClose }: Props) {
       addons: addons.join(','),
       total: total.toFixed(2),
     });
-    const url = `${PAYMENT_URL}?${params.toString()}`;
-    window.open(url, '_blank');
+    window.open(`${PAYMENT_URL}?${params.toString()}`, '_blank');
   };
 
   return (
@@ -223,14 +249,12 @@ export default function BookingModal({ open, onClose }: Props) {
         @keyframes bm-slide { from { opacity: 0; transform: translateY(20px) } to { opacity: 1; transform: translateY(0) } }
       `}</style>
 
-      {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/85 backdrop-blur-sm"
         style={{ animation: 'bm-fade 0.2s ease-out' }}
         onClick={onClose}
       />
 
-      {/* Modal */}
       <div
         className="relative w-full max-w-lg bg-[#0F0E0C] border border-white/15 rounded-3xl p-6 sm:p-8 shadow-2xl max-h-[90vh] overflow-y-auto"
         style={{ animation: 'bm-slide 0.3s cubic-bezier(0.16, 1, 0.3, 1)' }}
@@ -246,12 +270,8 @@ export default function BookingModal({ open, onClose }: Props) {
 
         {step === 'form' ? (
           <>
-            <h2 className="font-display uppercase text-2xl sm:text-3xl mb-1">
-              Prenota
-            </h2>
-            <p className="text-sm text-[#F5F1E8]/60 mb-6">
-              Scegli sala, data e orario
-            </p>
+            <h2 className="font-display uppercase text-2xl sm:text-3xl mb-1">Prenota</h2>
+            <p className="text-sm text-[#F5F1E8]/60 mb-6">Scegli sala, data e orario</p>
 
             {/* Sala */}
             <div className="mb-5">
@@ -274,9 +294,7 @@ export default function BookingModal({ open, onClose }: Props) {
                       {s.tag}
                     </div>
                     <div className="font-display text-lg mt-1">{s.name}</div>
-                    <div className="text-sm mt-1 text-[#F5F1E8]/70">
-                      €{s.rate}/h
-                    </div>
+                    <div className="text-sm mt-1 text-[#F5F1E8]/70">€{s.rate}/h</div>
                   </button>
                 ))}
               </div>
@@ -297,20 +315,36 @@ export default function BookingModal({ open, onClose }: Props) {
               />
             </div>
 
-            {/* Orari già occupati */}
-            {date && busySlotsForDay.length > 0 && (
+            {/* Studio block warning */}
+            {isBlocked && (
+              <div className="mb-4 p-3 rounded-xl border border-red-500/40 bg-red-500/10 flex gap-2 items-start">
+                <Lock className="w-4 h-4 text-red-300 mt-0.5 shrink-0" />
+                <div className="text-xs text-red-200">
+                  Lo studio non è disponibile in questa data.
+                  {blockReason && (
+                    <>
+                      {' '}
+                      Motivo: <b>{blockReason}</b>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Busy slots */}
+            {date && !isBlocked && busySlots.length > 0 && (
               <div className="mb-4 p-3 rounded-xl border border-red-500/30 bg-red-500/5">
                 <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-red-300 mb-2">
                   <AlertCircle className="w-3.5 h-3.5" />
-                  Orari già prenotati per {currentStudio.name}
+                  Orari già prenotati
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {busySlotsForDay.map((b, i) => (
+                  {busySlots.map((b, i) => (
                     <span
                       key={i}
                       className="text-xs bg-red-500/15 text-red-200 border border-red-500/30 px-2 py-0.5 rounded-md"
                     >
-                      {b.start} → {b.end}
+                      {b.start_time.slice(0, 5)} → {b.end_time.slice(0, 5)}
                     </span>
                   ))}
                 </div>
@@ -345,7 +379,6 @@ export default function BookingModal({ open, onClose }: Props) {
               </div>
             </div>
 
-            {/* Messaggi validazione */}
             <div className="mb-5 min-h-[22px] text-xs">
               {hours > 0 && !validHours && (
                 <div className="text-red-400 flex items-center gap-1.5">
@@ -356,10 +389,10 @@ export default function BookingModal({ open, onClose }: Props) {
               {validHours && hasConflict && (
                 <div className="text-red-400 flex items-center gap-1.5">
                   <AlertCircle className="w-3.5 h-3.5" />
-                  Questo orario è già prenotato. Scegli un altro slot.
+                  Questo orario è già prenotato.
                 </div>
               )}
-              {validHours && !hasConflict && (
+              {validHours && !hasConflict && !isBlocked && (
                 <div className="text-[#E8DCC8] flex items-center gap-1.5">
                   <Check className="w-3.5 h-3.5" />
                   Durata: {hours.toFixed(hours % 1 === 0 ? 0 : 1)} ore
@@ -367,8 +400,22 @@ export default function BookingModal({ open, onClose }: Props) {
               )}
             </div>
 
+            {/* Email */}
+            <div className="mb-5">
+              <label className="text-[10px] uppercase tracking-widest text-[#E8DCC8] mb-2 block">
+                Email (opzionale)
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="nome@email.com"
+                className="w-full bg-black/40 border border-white/15 rounded-xl px-4 py-3 text-[#F5F1E8] focus:outline-none focus:border-[#E8DCC8] transition-colors"
+              />
+            </div>
+
             {/* Add-on */}
-            <div className="mb-6">
+            <div className="mb-5">
               <label className="text-[10px] uppercase tracking-widest text-[#E8DCC8] mb-2 block">
                 Add-on opzionali
               </label>
@@ -391,15 +438,104 @@ export default function BookingModal({ open, onClose }: Props) {
                       />
                       <span className="text-sm">{a.name}</span>
                     </div>
-                    <span className="text-sm text-[#F5F1E8]/60">
-                      +€{a.rate}/h
-                    </span>
+                    <span className="text-sm text-[#F5F1E8]/60">+€{a.rate}/h</span>
                   </label>
                 ))}
               </div>
             </div>
 
-            {/* Totale preview */}
+            {/* Videomaker */}
+            <div className="mb-6 rounded-2xl border border-white/10 overflow-hidden">
+              <label className="flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.02]">
+                <div className="flex items-center gap-2">
+                  <Video className="w-4 h-4 text-[#E8DCC8]" />
+                  <span className="text-sm">Aggiungi videomaker</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={videomaker}
+                  onChange={(e) => setVideomaker(e.target.checked)}
+                  className="w-4 h-4 accent-[#E8DCC8]"
+                />
+              </label>
+
+              {videomaker && (
+                <div className="border-t border-white/10 p-4 space-y-4 bg-black/20">
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest text-[#E8DCC8] mb-1.5 block">
+                      Numero giorni
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={10}
+                      value={vmDays}
+                      onChange={(e) =>
+                        setVmDays(Math.max(1, Math.min(10, Number(e.target.value) || 1)))
+                      }
+                      className="w-full bg-black/40 border border-white/15 rounded-xl px-4 py-2.5"
+                    />
+                    <p className="text-[11px] text-[#F5F1E8]/55 mt-1.5">
+                      €800 primo giorno + €400 per ogni giorno successivo (9:00–21:00)
+                    </p>
+                  </div>
+
+                  <label className="flex items-center justify-between cursor-pointer">
+                    <span className="text-sm">Aggiungi VFX AI</span>
+                    <input
+                      type="checkbox"
+                      checked={vfxOn}
+                      onChange={(e) => setVfxOn(e.target.checked)}
+                      className="w-4 h-4 accent-[#E8DCC8]"
+                    />
+                  </label>
+
+                  {vfxOn && (
+                    <div>
+                      <label className="text-[10px] uppercase tracking-widest text-[#E8DCC8] mb-1.5 block">
+                        Secondi VFX
+                      </label>
+                      <input
+                        type="number"
+                        min={4}
+                        max={15}
+                        value={vfxSec}
+                        onChange={(e) => {
+                          const v = Number(e.target.value) || 4;
+                          if (v > 15) {
+                            toast.message('Oltre 15s, quotato su richiesta');
+                            setVfxSec(15);
+                          } else {
+                            setVfxSec(Math.max(4, Math.min(15, v)));
+                          }
+                        }}
+                        className="w-full bg-black/40 border border-white/15 rounded-xl px-4 py-2.5"
+                      />
+                      <p className="text-[11px] text-[#F5F1E8]/55 mt-1.5">
+                        €200 per pacchetto 4–15s. Oltre 15s, scrivici
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between items-center pt-2 border-t border-white/10">
+                    <span className="text-xs uppercase tracking-widest opacity-70">
+                      Totale videomaker
+                    </span>
+                    <span className="font-display text-xl">
+                      €{videomakerPrice(vmDays, vfxOn ? vfxSec : 0)}
+                    </span>
+                  </div>
+
+                  <div className="rounded-xl bg-white/[0.03] border border-white/10 p-3 text-[11px] text-[#F5F1E8]/55 leading-relaxed">
+                    Pagamento: 50% acconto alla conferma + 50% saldo il giorno del
+                    servizio. Costi extra a carico del cliente: noleggio
+                    location/auto/attrezzatura specifica, modelle/attori/comparse,
+                    vitto/alloggio/trasferte.
+                  </div>
+                </div>
+              )}
+            </div>
+
             {validForm && (
               <div className="mb-6 p-4 rounded-2xl bg-[#E8DCC8]/5 border border-[#E8DCC8]/20 flex justify-between items-center">
                 <span className="text-xs uppercase tracking-widest opacity-70">
@@ -409,7 +545,6 @@ export default function BookingModal({ open, onClose }: Props) {
               </div>
             )}
 
-            {/* Continua */}
             <button
               type="button"
               onClick={handleConfirm}
@@ -422,17 +557,13 @@ export default function BookingModal({ open, onClose }: Props) {
           </>
         ) : (
           <>
-            {/* CONFERMA */}
-            <h2 className="font-display uppercase text-2xl sm:text-3xl mb-1">
-              Conferma
-            </h2>
+            <h2 className="font-display uppercase text-2xl sm:text-3xl mb-1">Conferma</h2>
             <p className="text-sm text-[#F5F1E8]/60 mb-6">
               Controlla i dati prima di procedere
             </p>
 
             <div className="space-y-3.5 mb-6 p-5 rounded-2xl bg-black/30 border border-white/10">
               <Row label="Sala" value={currentStudio.name} />
-              <Row label="Tariffa" value={`€${currentStudio.rate}/h`} />
               <Row label="Data" value={formatDateIT(date)} />
               <Row label="Orario" value={`${startTime} → ${endTime}`} />
               <Row
@@ -447,6 +578,15 @@ export default function BookingModal({ open, onClose }: Props) {
                     .join(', ')}
                 />
               )}
+              {videomaker && (
+                <Row
+                  label="Videomaker"
+                  value={`${vmDays} giorn${vmDays > 1 ? 'i' : 'o'}${
+                    vfxOn ? ` · VFX ${vfxSec}s` : ''
+                  }`}
+                />
+              )}
+              {email && <Row label="Email" value={email} />}
               <div className="border-t border-white/10 pt-3.5 mt-1 flex justify-between items-center">
                 <span className="font-display uppercase text-sm">Totale</span>
                 <span className="font-display text-3xl text-[#E8DCC8]">
@@ -458,9 +598,10 @@ export default function BookingModal({ open, onClose }: Props) {
             <button
               type="button"
               onClick={handlePayment}
-              className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-[#E8DCC8] text-[#0A0908] px-6 py-3.5 text-sm uppercase tracking-widest font-medium hover:bg-[#F5F1E8] transition-colors mb-3"
+              disabled={submitting}
+              className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-[#E8DCC8] text-[#0A0908] px-6 py-3.5 text-sm uppercase tracking-widest font-medium hover:bg-[#F5F1E8] transition-colors mb-3 disabled:opacity-50"
             >
-              Paga con Stripe
+              {submitting ? 'Salvataggio…' : 'Conferma e paga'}
               <ArrowRight className="w-4 h-4" />
             </button>
 
