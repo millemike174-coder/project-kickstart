@@ -34,7 +34,7 @@ function formatDateIT(d: string) {
   return `${dd}/${m}/${y}`;
 }
 
-function normalizeBooking(row: Partial<Booking> & { [key: string]: unknown }): Booking {
+function normalizeBooking(row: Record<string, unknown>): Booking {
   return {
     id: String(row.id ?? crypto.randomUUID()),
     studio: row.studio === 'ssg' ? 'ssg' : 'piccolo',
@@ -95,7 +95,7 @@ export default function AdminDashboard() {
         setBookings([]);
         return;
       }
-      setBookings((data ?? []).map((row) => normalizeBooking(row)));
+      setBookings((data ?? []).map((row) => normalizeBooking(row as Record<string, unknown>)));
       setPage(0);
     } catch (error) {
       console.error('Admin dashboard load error', error);
