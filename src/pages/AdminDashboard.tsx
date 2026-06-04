@@ -29,8 +29,29 @@ function endOfMonth(d = new Date()) {
   return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10);
 }
 function formatDateIT(d: string) {
+  if (!d || !d.includes('-')) return d || '—';
   const [y, m, dd] = d.split('-');
   return `${dd}/${m}/${y}`;
+}
+
+function normalizeBooking(row: Partial<Booking> & { [key: string]: unknown }): Booking {
+  return {
+    id: String(row.id ?? crypto.randomUUID()),
+    studio: row.studio === 'ssg' ? 'ssg' : 'piccolo',
+    date: String(row.date ?? ''),
+    start_time: String(row.start_time ?? ''),
+    end_time: String(row.end_time ?? ''),
+    total: Number(row.total ?? 0),
+    addons: Array.isArray(row.addons) ? row.addons.map(String) : [],
+    email: typeof row.email === 'string' ? row.email : null,
+    status: row.status === 'cancelled' || row.status === 'pending' ? row.status : 'confirmed',
+    videomaker: Boolean(row.videomaker),
+    videomaker_days: Number(row.videomaker_days ?? 0),
+    vfx_ai_seconds: Number(row.vfx_ai_seconds ?? 0),
+    deposit_paid: Boolean(row.deposit_paid),
+    final_paid: Boolean(row.final_paid),
+    created_at: String(row.created_at ?? ''),
+  };
 }
 
 const PAGE = 20;
@@ -47,28 +68,42 @@ export default function AdminDashboard() {
   const [status, setStatus] = useState<'all' | 'confirmed' | 'cancelled' | 'pending'>('all');
   const [onlyVm, setOnlyVm] = useState(false);
   const [onlyVfx, setOnlyVfx] = useState(false);
+  const [dataError, setDataError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [detail, setDetail] = useState<Booking | null>(null);
   const [dayFilter, setDayFilter] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
-    let q = supabase
-      .from('bookings')
-      .select('*')
-      .gte('date', from)
-      .lte('date', to)
-      .order('date', { ascending: false })
-      .order('start_time', { ascending: false });
-    if (studio !== 'all') q = q.eq('studio', studio);
-    if (status !== 'all') q = q.eq('status', status);
-    if (onlyVm) q = q.eq('videomaker', true);
-    if (onlyVfx) q = q.gt('vfx_ai_seconds', 0);
-    const { data, error } = await q;
-    if (error) toast.error('Errore caricamento prenotazioni');
-    setBookings((data ?? []) as Booking[]);
-    setLoading(false);
-    setPage(0);
+    setDataError(null);
+    try {
+      let q = supabase
+        .from('bookings')
+        .select('*')
+        .gte('date', from)
+        .lte('date', to)
+        .order('date', { ascending: false })
+        .order('start_time', { ascending: false });
+      if (studio !== 'all') q = q.eq('studio', studio);
+      if (status !== 'all') q = q.eq('status', status);
+      if (onlyVm) q = q.eq('videomaker', true);
+      if (onlyVfx) q = q.gt('vfx_ai_seconds', 0);
+      const { data, error } = await q;
+      if (error) {
+        setDataError('Prenotazioni non disponibili al momento.');
+        toast.error('Errore caricamento prenotazioni');
+        setBookings([]);
+        return;
+      }
+      setBookings((data ?? []).map((row) => normalizeBooking(row)));
+      setPage(0);
+    } catch (error) {
+      console.error('Admin dashboard load error', error);
+      setDataError('Prenotazioni non disponibili al momento.');
+      setBookings([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -246,6 +281,8 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        {dataError && <div className="mb-3 text-xs text-red-300/90">{dataError}</div>}
+
         {/* Table */}
         <div className="rounded-2xl border border-white/10 overflow-hidden">
           <div className="overflow-x-auto">
@@ -286,15 +323,15 @@ export default function AdminDashboard() {
                     >
                       <Td>{formatDateIT(b.date)}</Td>
                       <Td>
-                        {b.start_time.slice(0, 5)}–{b.end_time.slice(0, 5)}
+                        {(b.start_time || '—').slice(0, 5)}–{(b.end_time || '—').slice(0, 5)}
                       </Td>
                       <Td className="uppercase">{b.studio}</Td>
                       <Td className="opacity-80">{b.email ?? '—'}</Td>
                       <Td>€{Number(b.total).toFixed(0)}</Td>
                       <Td>
                         <div className="flex flex-wrap gap-1">
-                          {b.addons.length === 0 && '—'}
-                          {b.addons.map((a) => (
+                          {(b.addons ?? []).length === 0 && '—'}
+                          {(b.addons ?? []).map((a) => (
                             <span
                               key={a}
                               className="text-[10px] uppercase tracking-wider bg-[#E8DCC8]/10 border border-[#E8DCC8]/30 px-1.5 py-0.5 rounded"
