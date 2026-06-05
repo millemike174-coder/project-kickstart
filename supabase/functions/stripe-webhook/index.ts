@@ -38,18 +38,33 @@ Deno.serve(async (req) => {
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object as Stripe.Checkout.Session;
     const bookingId = session.metadata?.booking_id;
+    const paymentType = session.metadata?.payment_type;
     if (bookingId) {
-      await supabase
-        .from('bookings')
-        .update({ status: 'confirmed', deposit_paid: true })
-        .eq('id', bookingId);
+      if (paymentType === 'balance') {
+        await supabase
+          .from('bookings')
+          .update({ final_paid: true, final_paid_at: new Date().toISOString() })
+          .eq('id', bookingId);
+      } else {
+        // default: deposit
+        await supabase
+          .from('bookings')
+          .update({
+            deposit_paid: true,
+            deposit_paid_at: new Date().toISOString(),
+            status: 'confirmed',
+          })
+          .eq('id', bookingId);
+      }
     }
   }
 
   if (event.type === 'checkout.session.expired' || event.type === 'checkout.session.async_payment_failed') {
     const session = event.data.object as Stripe.Checkout.Session;
     const bookingId = session.metadata?.booking_id;
-    if (bookingId) {
+    const paymentType = session.metadata?.payment_type;
+    // Only cancel the booking when the DEPOSIT session fails — balance failures shouldn't cancel a confirmed booking
+    if (bookingId && paymentType !== 'balance') {
       await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', bookingId);
     }
   }
