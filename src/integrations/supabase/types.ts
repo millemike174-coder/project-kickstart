@@ -100,30 +100,7 @@ export type Database = {
       }
     }
     Views: {
-      bookings_public: {
-        Row: {
-          date: string | null
-          end_time: string | null
-          start_time: string | null
-          status: string | null
-          studio: string | null
-        }
-        Insert: {
-          date?: string | null
-          end_time?: string | null
-          start_time?: string | null
-          status?: string | null
-          studio?: string | null
-        }
-        Update: {
-          date?: string | null
-          end_time?: string | null
-          start_time?: string | null
-          status?: string | null
-          studio?: string | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
       is_admin: { Args: never; Returns: boolean }
