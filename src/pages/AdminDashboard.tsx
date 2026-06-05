@@ -390,13 +390,21 @@ export default function AdminDashboard() {
                         </span>
                       </Td>
                       <Td>
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 flex-wrap">
                           <button
                             onClick={() => setDetail(b)}
                             className="text-xs underline opacity-80 hover:opacity-100"
                           >
                             Dettagli
                           </button>
+                          {b.deposit_paid && !b.final_paid && b.status !== 'cancelled' && (
+                            <button
+                              onClick={() => requestBalance(b)}
+                              className="text-xs underline text-[#E8DCC8] hover:text-white"
+                            >
+                              Richiedi saldo 50%
+                            </button>
+                          )}
                           {b.status !== 'cancelled' && (
                             <button
                               onClick={() => cancelBooking(b)}
