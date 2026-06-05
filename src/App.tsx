@@ -4,6 +4,8 @@ import Landing from "@/pages/Landing";
 import AdminLogin from "@/pages/AdminLogin";
 import AdminDashboard from "@/pages/AdminDashboard";
 import StudioAvailability from "@/pages/StudioAvailability";
+import BookingSuccess from "@/pages/BookingSuccess";
+import BookingCancelled from "@/pages/BookingCancelled";
 import ErrorBoundary from "@/components/ErrorBoundary";
 
 export default function App() {
