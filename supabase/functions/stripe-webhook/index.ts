@@ -40,18 +40,39 @@ Deno.serve(async (req) => {
     const bookingId = session.metadata?.booking_id;
     const paymentType = session.metadata?.payment_type;
     if (bookingId) {
+      // Look up the booking to know if it's a studio (100%) or videomaker (50%) payment.
+      const { data: bk } = await supabase
+        .from('bookings')
+        .select('videomaker')
+        .eq('id', bookingId)
+        .maybeSingle();
+      const isVm = !!bk?.videomaker;
+
       if (paymentType === 'balance') {
         await supabase
           .from('bookings')
           .update({ final_paid: true, final_paid_at: new Date().toISOString() })
           .eq('id', bookingId);
-      } else {
-        // default: deposit
+      } else if (isVm) {
+        // Videomaker deposit (50%): mark deposit paid and confirm booking.
         await supabase
           .from('bookings')
           .update({
             deposit_paid: true,
             deposit_paid_at: new Date().toISOString(),
+            status: 'confirmed',
+          })
+          .eq('id', bookingId);
+      } else {
+        // Studio booking: 100% paid upfront — set both deposit_paid AND final_paid.
+        const now = new Date().toISOString();
+        await supabase
+          .from('bookings')
+          .update({
+            deposit_paid: true,
+            deposit_paid_at: now,
+            final_paid: true,
+            final_paid_at: now,
             status: 'confirmed',
           })
           .eq('id', bookingId);

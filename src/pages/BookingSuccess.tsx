@@ -55,18 +55,28 @@ export default function BookingSuccess() {
     : 0;
   const deposit = vmTotal * 0.5;
 
+  const isConfirmed = booking?.status === 'confirmed';
+  const headline = loading
+    ? 'Verifica pagamento…'
+    : isConfirmed
+      ? 'Prenotazione confermata!'
+      : 'Pagamento in elaborazione';
+  const subline = loading
+    ? 'Stiamo verificando il pagamento.'
+    : isConfirmed
+      ? (isVm
+          ? 'Acconto videomaker ricevuto. Ti aspettiamo in studio.'
+          : 'Pagamento ricevuto. Ti aspettiamo in studio.')
+      : 'Il pagamento è stato avviato. Riceverai conferma a breve — puoi aggiornare la pagina tra qualche secondo.';
+
   return (
     <main className="min-h-screen bg-[#0A0908] text-[#F5F1E8] flex items-center justify-center p-6">
       <div className="max-w-md w-full text-center">
         <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-[#E8DCC8]/10 border border-[#E8DCC8]/30 flex items-center justify-center">
           <Check className="w-7 h-7 text-[#E8DCC8]" />
         </div>
-        <h1 className="font-display uppercase text-3xl sm:text-4xl mb-3">Prenotazione confermata!</h1>
-        <p className="text-sm text-[#F5F1E8]/70 mb-8">
-          {isVm
-            ? 'Acconto videomaker ricevuto. Ti aspettiamo in studio.'
-            : 'Prenotazione registrata. Ti aspettiamo in studio.'}
-        </p>
+        <h1 className="font-display uppercase text-3xl sm:text-4xl mb-3">{headline}</h1>
+        <p className="text-sm text-[#F5F1E8]/70 mb-8">{subline}</p>
 
         {loading ? (
           <p className="text-xs opacity-60 mb-8">Caricamento dettagli…</p>

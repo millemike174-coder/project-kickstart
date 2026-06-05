@@ -116,7 +116,7 @@ Deno.serve(async (req) => {
     .select('id,start_time,end_time')
     .eq('studio', studio)
     .eq('date', date)
-    .eq('status', 'confirmed');
+    .in('status', ['confirmed', 'pending']);
   if (confErr) return bad(500, 'Conflict check failed');
   const hasConflict = (conflicts ?? []).some((b: any) => {
     const bs = toMin(b.start_time);
@@ -145,9 +145,9 @@ Deno.serve(async (req) => {
       total,
       addons: isVideomakerResource ? [] : addons,
       email: email || null,
-      // Studio bookings (piccolo/ssg) confirm immediately — no deposit.
-      // Videomaker bookings stay pending until Stripe deposit is paid.
-      status: isVideomakerResource ? 'pending' : 'confirmed',
+      // All bookings start as pending. Stripe webhook flips them to confirmed
+      // once payment succeeds (100% for studios, 50% deposit for videomaker).
+      status: 'pending',
       videomaker: isVideomakerResource,
       videomaker_days: isVideomakerResource ? videomaker_days : 0,
       vfx_ai_seconds: isVideomakerResource ? vfx_ai_seconds : 0,
