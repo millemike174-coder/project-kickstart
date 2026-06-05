@@ -202,7 +202,26 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
     );
 
   const handleConfirm = () => {
-    if (!validForm) return;
+    if (!date) {
+      toast.error('Seleziona una data');
+      return;
+    }
+    if (!startTime || !endTime) {
+      toast.error('Seleziona orario di inizio e fine');
+      return;
+    }
+    if (!validHours) {
+      toast.error('Minimo 2 ore di booking');
+      return;
+    }
+    if (isBlocked) {
+      toast.error('Lo studio non è disponibile in questa data');
+      return;
+    }
+    if (hasConflict) {
+      toast.error('Questo orario è già prenotato');
+      return;
+    }
     setStep('confirm');
   };
 
