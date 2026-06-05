@@ -24,6 +24,7 @@ export type Database = {
           end_time: string
           final_paid: boolean
           id: string
+          ip_hash: string | null
           start_time: string
           status: string
           studio: string
@@ -41,6 +42,7 @@ export type Database = {
           end_time: string
           final_paid?: boolean
           id?: string
+          ip_hash?: string | null
           start_time: string
           status?: string
           studio: string
@@ -58,6 +60,7 @@ export type Database = {
           end_time?: string
           final_paid?: boolean
           id?: string
+          ip_hash?: string | null
           start_time?: string
           status?: string
           studio?: string
@@ -97,10 +100,33 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      bookings_public: {
+        Row: {
+          date: string | null
+          end_time: string | null
+          start_time: string | null
+          status: string | null
+          studio: string | null
+        }
+        Insert: {
+          date?: string | null
+          end_time?: string | null
+          start_time?: string | null
+          status?: string | null
+          studio?: string | null
+        }
+        Update: {
+          date?: string | null
+          end_time?: string | null
+          start_time?: string | null
+          status?: string | null
+          studio?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
-      [_ in never]: never
+      is_admin: { Args: never; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
