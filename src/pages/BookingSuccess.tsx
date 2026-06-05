@@ -13,6 +13,9 @@ type Booking = {
   status: string;
   deposit_paid: boolean;
   final_paid: boolean;
+  videomaker?: boolean;
+  videomaker_days?: number;
+  vfx_ai_seconds?: number;
 };
 
 function formatDateIT(d: string) {
@@ -44,7 +47,13 @@ export default function BookingSuccess() {
   }, [bookingId]);
 
   const total = booking ? Number(booking.total) : 0;
-  const deposit = total * 0.5;
+  const isVm = !!booking?.videomaker;
+  const vmDays = Number(booking?.videomaker_days) || 0;
+  const vmVfx = Number(booking?.vfx_ai_seconds) || 0;
+  const vmTotal = isVm && vmDays > 0
+    ? 800 + Math.max(0, vmDays - 1) * 400 + (vmVfx > 0 ? 200 : 0)
+    : 0;
+  const deposit = vmTotal * 0.5;
 
   return (
     <main className="min-h-screen bg-[#0A0908] text-[#F5F1E8] flex items-center justify-center p-6">
@@ -54,7 +63,9 @@ export default function BookingSuccess() {
         </div>
         <h1 className="font-display uppercase text-3xl sm:text-4xl mb-3">Prenotazione confermata!</h1>
         <p className="text-sm text-[#F5F1E8]/70 mb-8">
-          Acconto ricevuto. Ti aspettiamo in studio.
+          {isVm
+            ? 'Acconto videomaker ricevuto. Ti aspettiamo in studio.'
+            : 'Prenotazione registrata. Ti aspettiamo in studio.'}
         </p>
 
         {loading ? (
@@ -69,12 +80,17 @@ export default function BookingSuccess() {
             />
             <div className="border-t border-white/10 my-2" />
             <Row label="Totale" value={`€${total.toFixed(0)}`} />
-            <Row label="Acconto pagato" value={`€${deposit.toFixed(0)}`} />
-            <Row label="Saldo in studio" value={`€${(total - deposit).toFixed(0)}`} />
+            {isVm && (
+              <>
+                <Row label="Acconto videomaker (50%)" value={`€${deposit.toFixed(0)}`} />
+                <Row label="Saldo da pagare" value={`€${(total - deposit).toFixed(0)}`} />
+              </>
+            )}
           </div>
         ) : (
           <p className="text-xs text-red-300/80 mb-8">Dettagli prenotazione non disponibili.</p>
         )}
+
 
         <Link
           to="/"

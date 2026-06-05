@@ -228,7 +228,8 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
   const handlePayment = async () => {
     setSubmitting(true);
     try {
-      // Step 1: create booking (pending)
+      // Step 1: create booking. For studio-only it's confirmed immediately;
+      // for videomaker it's created pending and confirmed by the Stripe webhook.
       const { data: createData, error: createErr } = await supabase.functions.invoke('create-booking', {
         body: {
           studio,
@@ -246,14 +247,20 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
       const createRespErr = (createData as any)?.error;
       const booking_id = (createData as any)?.booking_id;
       if (createErr || createRespErr || !booking_id) {
-        toast.error(createRespErr || createErr?.message || 'Errore con il pagamento, riprova o scrivici su Instagram');
+        toast.error(createRespErr || createErr?.message || 'Errore durante la prenotazione, riprova o scrivici su Instagram');
         setSubmitting(false);
         return;
       }
 
-      // Step 2: create Stripe Checkout for deposit
+      // Studio-only booking → no deposit, no Stripe redirect.
+      if (!videomaker) {
+        window.location.href = `/booking-success?booking_id=${booking_id}`;
+        return;
+      }
+
+      // Step 2 (videomaker only): Stripe Checkout for 50% deposit of videomaker price.
       const { data: payData, error: payErr } = await supabase.functions.invoke('create-checkout-session', {
-        body: { booking_id, amount_eur: total, payment_type: 'deposit' },
+        body: { booking_id, payment_type: 'deposit' },
       });
       const payRespErr = (payData as any)?.error;
       const url = (payData as any)?.checkout_url || (payData as any)?.url;
@@ -268,6 +275,7 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
       toast.error('Errore con il pagamento, riprova o scrivici su Instagram');
     }
   };
+
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
@@ -627,7 +635,9 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
               disabled={submitting}
               className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-[#E8DCC8] text-[#0A0908] px-6 py-3.5 text-sm uppercase tracking-widest font-medium hover:bg-[#F5F1E8] transition-colors mb-3 disabled:opacity-50"
             >
-              {submitting ? 'Reindirizzamento al pagamento…' : 'Conferma e paga'}
+              {submitting
+                ? (videomaker ? 'Reindirizzamento al pagamento…' : 'Conferma in corso…')
+                : (videomaker ? 'Paga acconto videomaker (50%)' : 'Conferma prenotazione')}
               <ArrowRight className="w-4 h-4" />
             </button>
 

@@ -40,11 +40,14 @@ Deno.serve(async (req) => {
 
   const { data: booking, error: bErr } = await supabase
     .from('bookings')
-    .select('id, studio, date, start_time, end_time, total, email, deposit_paid, final_paid')
+    .select('id, studio, date, start_time, end_time, total, email, deposit_paid, final_paid, videomaker, videomaker_days, vfx_ai_seconds')
     .eq('id', booking_id)
     .maybeSingle();
 
   if (bErr || !booking) return bad(404, 'Booking not found');
+
+  // Stripe deposit/balance only applies to videomaker bookings.
+  if (!booking.videomaker) return bad(400, 'Booking does not require payment');
 
   if (payment_type === 'deposit' && booking.deposit_paid) return bad(409, 'Deposit already paid');
   if (payment_type === 'balance') {
@@ -52,12 +55,16 @@ Deno.serve(async (req) => {
     if (booking.final_paid) return bad(409, 'Balance already paid');
   }
 
-  const total = Number(booking.total);
-  if (!Number.isFinite(total) || total <= 0) return bad(400, 'Invalid booking total');
+  // Videomaker price formula (mirrors frontend): 800 base + 400/extra day + 200 if any VFX seconds.
+  const days = Number(booking.videomaker_days) || 0;
+  const vfxSec = Number(booking.vfx_ai_seconds) || 0;
+  if (days <= 0) return bad(400, 'Invalid videomaker days');
+  const vmTotal = 800 + Math.max(0, days - 1) * 400 + (vfxSec > 0 ? 200 : 0);
 
-  // Both deposit and balance = 50% of total
-  const amountCents = Math.round(total * 100 * 0.5);
+  // 50% of videomaker portion only — studio rental is NOT included.
+  const amountCents = Math.round(vmTotal * 100 * 0.5);
   if (amountCents < 50) return bad(400, 'Amount too small');
+
 
   const stripe = new Stripe(stripeSecret, { apiVersion: '2024-12-18.acacia' });
   const origin = req.headers.get('origin') || 'https://bright-blossom-starter.lovable.app';
@@ -74,7 +81,7 @@ Deno.serve(async (req) => {
             currency: 'eur',
             unit_amount: amountCents,
             product_data: {
-              name: `Trenches Records — ${payment_type === 'deposit' ? 'Acconto' : 'Saldo'} ${String(booking.studio).toUpperCase()}`,
+              name: `Trenches Records — ${payment_type === 'deposit' ? 'Acconto' : 'Saldo'} Videomaker`,
               description: `${booking.date} ${String(booking.start_time).slice(0, 5)}-${String(booking.end_time).slice(0, 5)}`,
             },
           },

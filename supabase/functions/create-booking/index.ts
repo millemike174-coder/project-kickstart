@@ -132,7 +132,9 @@ Deno.serve(async (req) => {
       total,
       addons,
       email: email || null,
-      status: 'pending',
+      // Studio-only bookings don't require deposit → confirm immediately.
+      // Videomaker bookings stay pending until Stripe deposit is paid.
+      status: videomaker ? 'pending' : 'confirmed',
       videomaker,
       videomaker_days,
       vfx_ai_seconds,
