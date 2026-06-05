@@ -208,28 +208,46 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
 
   const handlePayment = async () => {
     setSubmitting(true);
-    const { data, error } = await supabase.functions.invoke('create-checkout-session', {
-      body: {
-        studio,
-        date,
-        start_time: startTime,
-        end_time: endTime,
-        total,
-        addons,
-        email: email || null,
-        videomaker,
-        videomaker_days: videomaker ? vmDays : 0,
-        vfx_ai_seconds: videomaker && vfxOn ? vfxSec : 0,
-      },
-    });
-    setSubmitting(false);
-    const respErr = (data as any)?.error;
-    const url = (data as any)?.url;
-    if (error || respErr || !url) {
-      toast.error(respErr || error?.message || 'Errore creazione pagamento');
-      return;
+    try {
+      // Step 1: create booking (pending)
+      const { data: createData, error: createErr } = await supabase.functions.invoke('create-booking', {
+        body: {
+          studio,
+          date,
+          start_time: startTime,
+          end_time: endTime,
+          total,
+          addons,
+          email: email || null,
+          videomaker,
+          videomaker_days: videomaker ? vmDays : 0,
+          vfx_ai_seconds: videomaker && vfxOn ? vfxSec : 0,
+        },
+      });
+      const createRespErr = (createData as any)?.error;
+      const booking_id = (createData as any)?.booking_id;
+      if (createErr || createRespErr || !booking_id) {
+        toast.error(createRespErr || createErr?.message || 'Errore con il pagamento, riprova o scrivici su Instagram');
+        setSubmitting(false);
+        return;
+      }
+
+      // Step 2: create Stripe Checkout for deposit
+      const { data: payData, error: payErr } = await supabase.functions.invoke('create-checkout-session', {
+        body: { booking_id, amount_eur: total, payment_type: 'deposit' },
+      });
+      const payRespErr = (payData as any)?.error;
+      const url = (payData as any)?.checkout_url || (payData as any)?.url;
+      if (payErr || payRespErr || !url) {
+        toast.error(payRespErr || payErr?.message || 'Errore con il pagamento, riprova o scrivici su Instagram');
+        setSubmitting(false);
+        return;
+      }
+      window.location.href = url;
+    } catch (_e) {
+      setSubmitting(false);
+      toast.error('Errore con il pagamento, riprova o scrivici su Instagram');
     }
-    window.location.href = url;
   };
 
   return (
