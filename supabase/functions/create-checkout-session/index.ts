@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
             currency: 'eur',
             unit_amount: amountCents,
             product_data: {
-              name: `Trenches Records — ${payment_type === 'deposit' ? 'Acconto' : 'Saldo'} ${String(booking.studio).toUpperCase()}`,
+              name: `Trenches Records — ${payment_type === 'deposit' ? 'Acconto' : 'Saldo'} Videomaker`,
               description: `${booking.date} ${String(booking.start_time).slice(0, 5)}-${String(booking.end_time).slice(0, 5)}`,
             },
           },
