@@ -168,6 +168,24 @@ export default function AdminDashboard() {
     toast.success('Prenotazione cancellata');
   };
 
+  const requestBalance = async (b: Booking) => {
+    const { data, error } = await supabase.functions.invoke('create-checkout-session', {
+      body: { booking_id: b.id, payment_type: 'balance' },
+    });
+    const respErr = (data as any)?.error;
+    const url = (data as any)?.checkout_url || (data as any)?.url;
+    if (error || respErr || !url) {
+      toast.error(respErr || error?.message || 'Errore creazione link saldo');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Link saldo copiato — mandalo al cliente');
+    } catch {
+      window.prompt('Copia il link saldo:', url);
+    }
+  };
+
   if (authLoading || !isAdmin) {
     return (
       <div className="min-h-screen bg-[#0A0908] text-[#F5F1E8] flex items-center justify-center">
