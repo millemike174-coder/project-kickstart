@@ -249,13 +249,8 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
         return;
       }
 
-      // Studio bookings: confirmed immediately, no Stripe.
-      if (mode === 'studio') {
-        window.location.href = `/booking-success?booking_id=${booking_id}`;
-        return;
-      }
-
-      // Videomaker: 50% deposit via Stripe.
+      // All bookings (studio 100% or videomaker 50% deposit) go through Stripe.
+      // The booking stays 'pending' until the webhook confirms payment.
       const { data: payData, error: payErr } = await supabase.functions.invoke('create-checkout-session', {
         body: { booking_id, payment_type: 'deposit' },
       });
