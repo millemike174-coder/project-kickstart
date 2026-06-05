@@ -20,9 +20,11 @@ export type Database = {
           created_at: string
           date: string
           deposit_paid: boolean
+          deposit_paid_at: string | null
           email: string | null
           end_time: string
           final_paid: boolean
+          final_paid_at: string | null
           id: string
           ip_hash: string | null
           start_time: string
@@ -39,9 +41,11 @@ export type Database = {
           created_at?: string
           date: string
           deposit_paid?: boolean
+          deposit_paid_at?: string | null
           email?: string | null
           end_time: string
           final_paid?: boolean
+          final_paid_at?: string | null
           id?: string
           ip_hash?: string | null
           start_time: string
@@ -58,9 +62,11 @@ export type Database = {
           created_at?: string
           date?: string
           deposit_paid?: boolean
+          deposit_paid_at?: string | null
           email?: string | null
           end_time?: string
           final_paid?: boolean
+          final_paid_at?: string | null
           id?: string
           ip_hash?: string | null
           start_time?: string
