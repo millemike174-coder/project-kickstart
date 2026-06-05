@@ -18,6 +18,8 @@ export default function App() {
           <Route path="/admin/login" element={<AdminLogin />} />
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
           <Route path="/admin/studios" element={<StudioAvailability />} />
+          <Route path="/booking/success" element={<BookingSuccess />} />
+          <Route path="/booking/cancelled" element={<BookingCancelled />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
