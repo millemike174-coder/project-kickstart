@@ -635,7 +635,9 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
               disabled={submitting}
               className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-[#E8DCC8] text-[#0A0908] px-6 py-3.5 text-sm uppercase tracking-widest font-medium hover:bg-[#F5F1E8] transition-colors mb-3 disabled:opacity-50"
             >
-              {submitting ? 'Reindirizzamento al pagamento…' : 'Conferma e paga'}
+              {submitting
+                ? (videomaker ? 'Reindirizzamento al pagamento…' : 'Conferma in corso…')
+                : (videomaker ? 'Paga acconto videomaker (50%)' : 'Conferma prenotazione')}
               <ArrowRight className="w-4 h-4" />
             </button>
 
