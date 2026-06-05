@@ -3,8 +3,6 @@ import { X, ArrowRight, Check, AlertCircle, Video, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
-// ─── CONFIGURAZIONE PAGAMENTO ─────────────────────────────────
-const PAYMENT_URL = 'https://buy.stripe.com/PLACEHOLDER';
 
 const toMinutes = (t: string) => {
   if (!t) return 0;
