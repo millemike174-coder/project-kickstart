@@ -210,22 +210,24 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
 
   const handlePayment = async () => {
     setSubmitting(true);
-    const { error } = await supabase.from('bookings').insert({
-      studio,
-      date,
-      start_time: startTime,
-      end_time: endTime,
-      total,
-      addons,
-      email: email || null,
-      status: 'confirmed',
-      videomaker,
-      videomaker_days: videomaker ? vmDays : 0,
-      vfx_ai_seconds: videomaker && vfxOn ? vfxSec : 0,
+    const { data, error } = await supabase.functions.invoke('create-booking', {
+      body: {
+        studio,
+        date,
+        start_time: startTime,
+        end_time: endTime,
+        total,
+        addons,
+        email: email || null,
+        videomaker,
+        videomaker_days: videomaker ? vmDays : 0,
+        vfx_ai_seconds: videomaker && vfxOn ? vfxSec : 0,
+      },
     });
     setSubmitting(false);
-    if (error) {
-      toast.error('Errore salvataggio prenotazione');
+    const respErr = (data as any)?.error;
+    if (error || respErr) {
+      toast.error(respErr || error?.message || 'Errore salvataggio prenotazione');
       return;
     }
     toast.success('Prenotazione salvata');

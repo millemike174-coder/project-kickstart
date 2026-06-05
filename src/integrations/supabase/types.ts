@@ -24,6 +24,7 @@ export type Database = {
           end_time: string
           final_paid: boolean
           id: string
+          ip_hash: string | null
           start_time: string
           status: string
           studio: string
@@ -41,6 +42,7 @@ export type Database = {
           end_time: string
           final_paid?: boolean
           id?: string
+          ip_hash?: string | null
           start_time: string
           status?: string
           studio: string
@@ -58,6 +60,7 @@ export type Database = {
           end_time?: string
           final_paid?: boolean
           id?: string
+          ip_hash?: string | null
           start_time?: string
           status?: string
           studio?: string
@@ -100,7 +103,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      is_admin: { Args: never; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
