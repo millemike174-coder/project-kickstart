@@ -26,6 +26,11 @@ function bad(status: number, message: string) {
 const ALLOWED_STUDIOS = new Set(['piccolo', 'ssg']);
 const ALLOWED_ADDONS = new Set(['producer', 'fonico']);
 
+const toMin = (t: string) => {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+};
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return bad(405, 'Method not allowed');
@@ -56,7 +61,7 @@ Deno.serve(async (req) => {
     return bad(400, 'Invalid start_time');
   if (typeof end_time !== 'string' || !/^\d{2}:\d{2}(:\d{2})?$/.test(end_time))
     return bad(400, 'Invalid end_time');
-  if (typeof total !== 'number' || total < 0 || total > 100000) return bad(400, 'Invalid total');
+  if (typeof total !== 'number' || total <= 0 || total > 100000) return bad(400, 'Invalid total');
   if (!Array.isArray(addons) || addons.some((a) => typeof a !== 'string' || !ALLOWED_ADDONS.has(a)))
     return bad(400, 'Invalid addons');
   if (email != null && (typeof email !== 'string' || email.length > 254)) return bad(400, 'Invalid email');
@@ -65,6 +70,10 @@ Deno.serve(async (req) => {
     return bad(400, 'Invalid videomaker_days');
   if (typeof vfx_ai_seconds !== 'number' || vfx_ai_seconds < 0 || vfx_ai_seconds > 60)
     return bad(400, 'Invalid vfx_ai_seconds');
+
+  const s = toMin(start_time);
+  const e = toMin(end_time);
+  if (e - s < 120) return bad(400, 'Minimum 2 hours');
 
   const ip =
     req.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
@@ -85,7 +94,6 @@ Deno.serve(async (req) => {
     .select('id', { count: 'exact', head: true })
     .eq('ip_hash', ip_hash)
     .gte('created_at', since);
-
   if (countErr) return bad(500, 'Rate check failed');
   if ((count ?? 0) >= RATE_LIMIT) return bad(429, 'Too many bookings, try again later');
 
@@ -96,16 +104,7 @@ Deno.serve(async (req) => {
     .eq('studio', studio)
     .eq('date', date)
     .eq('status', 'confirmed');
-
   if (confErr) return bad(500, 'Conflict check failed');
-
-  const toMin = (t: string) => {
-    const [h, m] = t.split(':').map(Number);
-    return h * 60 + m;
-  };
-  const s = toMin(start_time);
-  const e = toMin(end_time);
-  if (e - s < 120) return bad(400, 'Minimum 2 hours');
   const hasConflict = (conflicts ?? []).some((b: any) => {
     const bs = toMin(b.start_time);
     const be = toMin(b.end_time);
@@ -123,24 +122,28 @@ Deno.serve(async (req) => {
   if (blockErr) return bad(500, 'Block check failed');
   if ((blocks ?? []).length > 0) return bad(409, 'Studio unavailable on this date');
 
-  const { error: insErr } = await supabase.from('bookings').insert({
-    studio,
-    date,
-    start_time,
-    end_time,
-    total,
-    addons,
-    email: email || null,
-    status: 'confirmed',
-    videomaker,
-    videomaker_days,
-    vfx_ai_seconds,
-    ip_hash,
-  });
+  const { data: inserted, error: insErr } = await supabase
+    .from('bookings')
+    .insert({
+      studio,
+      date,
+      start_time,
+      end_time,
+      total,
+      addons,
+      email: email || null,
+      status: 'pending',
+      videomaker,
+      videomaker_days,
+      vfx_ai_seconds,
+      ip_hash,
+    })
+    .select('id')
+    .single();
 
-  if (insErr) return bad(500, 'Insert failed');
+  if (insErr || !inserted) return bad(500, 'Insert failed');
 
-  return new Response(JSON.stringify({ ok: true }), {
+  return new Response(JSON.stringify({ ok: true, booking_id: inserted.id }), {
     status: 200,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
