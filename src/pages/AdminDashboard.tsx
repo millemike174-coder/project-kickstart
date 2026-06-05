@@ -6,7 +6,7 @@ import { useAdminAuth } from '@/hooks/useAdminAuth';
 
 type Booking = {
   id: string;
-  studio: 'piccolo' | 'ssg';
+  studio: 'piccolo' | 'ssg' | 'videomaker';
   date: string;
   start_time: string;
   end_time: string;
@@ -35,9 +35,12 @@ function formatDateIT(d: string) {
 }
 
 function normalizeBooking(row: Record<string, unknown>): Booking {
+  const rawStudio = row.studio;
+  const studio: Booking['studio'] =
+    rawStudio === 'ssg' || rawStudio === 'videomaker' ? rawStudio : 'piccolo';
   return {
     id: String(row.id ?? crypto.randomUUID()),
-    studio: row.studio === 'ssg' ? 'ssg' : 'piccolo',
+    studio,
     date: String(row.date ?? ''),
     start_time: String(row.start_time ?? ''),
     end_time: String(row.end_time ?? ''),
@@ -64,7 +67,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [from, setFrom] = useState(startOfMonth());
   const [to, setTo] = useState(endOfMonth());
-  const [studio, setStudio] = useState<'all' | 'piccolo' | 'ssg'>('all');
+  const [studio, setStudio] = useState<'all' | 'piccolo' | 'ssg' | 'videomaker'>('all');
   const [status, setStatus] = useState<'all' | 'confirmed' | 'cancelled' | 'pending'>('all');
   const [onlyVm, setOnlyVm] = useState(false);
   const [onlyVfx, setOnlyVfx] = useState(false);
@@ -125,11 +128,13 @@ export default function AdminDashboard() {
     const rev = confirmed.reduce((s, b) => s + Number(b.total || 0), 0);
     const ssg = confirmed.filter((b) => b.studio === 'ssg').length;
     const piccolo = confirmed.filter((b) => b.studio === 'piccolo').length;
+    const vm = bookings.filter((b) => b.studio === 'videomaker' && b.status !== 'cancelled').length;
     return {
       count: confirmed.length,
       revenue: rev,
       ssg,
       piccolo,
+      vm,
     };
   }, [bookings]);
 
@@ -217,11 +222,12 @@ export default function AdminDashboard() {
 
       <main className="px-5 sm:px-8 py-8 max-w-7xl mx-auto">
         {/* Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mb-8">
           <StatCard label="Prenotazioni mese" value={String(stats.count)} />
           <StatCard label="Revenue mese" value={`€${stats.revenue.toFixed(0)}`} />
-          <StatCard label="Occupazione SSG" value={String(stats.ssg)} />
-          <StatCard label="Occupazione Piccolo" value={String(stats.piccolo)} />
+          <StatCard label="Studio SSG" value={String(stats.ssg)} />
+          <StatCard label="Studio Piccolo" value={String(stats.piccolo)} />
+          <StatCard label="Videomaker" value={String(stats.vm)} />
         </div>
 
         {/* Filters */}
@@ -244,15 +250,16 @@ export default function AdminDashboard() {
               style={{ colorScheme: 'dark' }}
             />
           </Field>
-          <Field label="Studio">
+          <Field label="Risorsa">
             <select
               value={studio}
               onChange={(e) => setStudio(e.target.value as any)}
               className="bg-black/40 border border-white/15 rounded-lg px-3 py-2 text-sm"
             >
-              <option value="all">Tutti</option>
+              <option value="all">Tutte</option>
               <option value="ssg">SSG</option>
               <option value="piccolo">Piccolo</option>
+              <option value="videomaker">Videomaker</option>
             </select>
           </Field>
           <Field label="Stato">
