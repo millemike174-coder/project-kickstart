@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { X, ArrowRight, Check, AlertCircle, Video, Lock } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { X, ArrowRight, Check, AlertCircle, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -10,6 +10,7 @@ const toMinutes = (t: string) => {
   return h * 60 + m;
 };
 
+// Strict overlap: edge-touching (12-14 / 14-16) is allowed.
 const overlaps = (
   startA: string,
   endA: string,
@@ -24,6 +25,7 @@ const overlaps = (
 };
 
 type StudioId = 'piccolo' | 'ssg';
+type ResourceId = StudioId | 'videomaker';
 
 type Studio = {
   id: StudioId;
@@ -87,6 +89,10 @@ type BusyRow = {
 };
 
 export default function BookingModal({ open, onClose, initialVideomaker = false }: Props) {
+  // Mode is locked when the modal opens — Videomaker is a fully separate flow
+  // from the two studios. No mixing across resources.
+  const mode: 'studio' | 'videomaker' = initialVideomaker ? 'videomaker' : 'studio';
+
   const [studio, setStudio] = useState<StudioId>('piccolo');
   const [date, setDate] = useState('');
   const [startTime, setStartTime] = useState('');
@@ -95,22 +101,20 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
   const [email, setEmail] = useState('');
   const [step, setStep] = useState<'form' | 'confirm'>('form');
 
-  // Videomaker
-  const [videomaker, setVideomaker] = useState(initialVideomaker);
+  // Videomaker pricing inputs (only relevant in videomaker mode)
   const [vmDays, setVmDays] = useState(1);
   const [vfxOn, setVfxOn] = useState(false);
   const [vfxSec, setVfxSec] = useState(4);
 
-  // From DB
+  // From DB — always scoped to the currently selected resource only.
   const [busySlots, setBusySlots] = useState<BusyRow[]>([]);
   const [blocks, setBlocks] = useState<BlockRow[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   const today = new Date().toISOString().split('T')[0];
 
-  useEffect(() => {
-    if (open) setVideomaker(initialVideomaker);
-  }, [open, initialVideomaker]);
+  // The resource being booked — drives the conflict query.
+  const resource: ResourceId = mode === 'videomaker' ? 'videomaker' : studio;
 
   useEffect(() => {
     if (!open) return;
@@ -132,7 +136,8 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
     }
   }, [open]);
 
-  // Fetch busy slots + blocks when studio/date changes
+  // Fetch busy slots + blocks for THIS resource on the selected date.
+  // Conflicts are strictly per-resource — no cross-resource blocking.
   useEffect(() => {
     if (!open || !date) {
       setBusySlots([]);
@@ -145,13 +150,13 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
         supabase
           .from('bookings')
           .select('start_time,end_time')
-          .eq('studio', studio)
+          .eq('studio', resource)
           .eq('date', date)
           .eq('status', 'confirmed'),
         supabase
           .from('studio_blocks')
           .select('start_date,end_date,reason')
-          .eq('studio', studio)
+          .eq('studio', resource)
           .lte('start_date', date)
           .gte('end_date', date),
       ]);
@@ -162,7 +167,7 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
     return () => {
       cancelled = true;
     };
-  }, [open, studio, date]);
+  }, [open, resource, date]);
 
   if (!open) return null;
 
@@ -173,15 +178,23 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
     return (toMinutes(endTime) - toMinutes(startTime)) / 60;
   };
   const hours = Math.max(0, computeHours());
-  const studioTotal = hours * currentStudio.rate;
-  const addonsTotal = addons.reduce((sum, id) => {
-    const a = ADDONS.find((x) => x.id === id);
-    return sum + (a ? a.rate * hours : 0);
-  }, 0);
-  const vmTotal = videomaker ? videomakerPrice(vmDays, vfxOn ? vfxSec : 0) : 0;
+
+  // Pricing: studios charge by hour + addons; videomaker uses its own formula.
+  const studioTotal = mode === 'studio' ? hours * currentStudio.rate : 0;
+  const addonsTotal =
+    mode === 'studio'
+      ? addons.reduce((sum, id) => {
+          const a = ADDONS.find((x) => x.id === id);
+          return sum + (a ? a.rate * hours : 0);
+        }, 0)
+      : 0;
+  const vmTotal = mode === 'videomaker' ? videomakerPrice(vmDays, vfxOn ? vfxSec : 0) : 0;
   const total = studioTotal + addonsTotal + vmTotal;
 
-  const validHours = hours >= 2;
+  // Duration rules: min 2h always; videomaker also capped at 10h.
+  const minHoursOk = hours >= 2;
+  const maxHoursOk = mode === 'videomaker' ? hours <= 10 : true;
+  const validHours = minHoursOk && maxHoursOk;
 
   const hasConflict =
     !!date && !!startTime && !!endTime && validHours
@@ -202,46 +215,30 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
     );
 
   const handleConfirm = () => {
-    if (!date) {
-      toast.error('Seleziona una data');
-      return;
-    }
-    if (!startTime || !endTime) {
-      toast.error('Seleziona orario di inizio e fine');
-      return;
-    }
-    if (!validHours) {
-      toast.error('Minimo 2 ore di booking');
-      return;
-    }
-    if (isBlocked) {
-      toast.error('Lo studio non è disponibile in questa data');
-      return;
-    }
-    if (hasConflict) {
-      toast.error('Questo orario è già prenotato');
-      return;
-    }
+    if (!date) return toast.error('Seleziona una data');
+    if (!startTime || !endTime) return toast.error('Seleziona orario di inizio e fine');
+    if (!minHoursOk) return toast.error('Minimo 2 ore di booking');
+    if (!maxHoursOk) return toast.error('Massimo 10 ore per il videomaker');
+    if (isBlocked) return toast.error('Risorsa non disponibile in questa data');
+    if (hasConflict) return toast.error('Questo orario è già prenotato');
     setStep('confirm');
   };
 
   const handlePayment = async () => {
     setSubmitting(true);
     try {
-      // Step 1: create booking. For studio-only it's confirmed immediately;
-      // for videomaker it's created pending and confirmed by the Stripe webhook.
       const { data: createData, error: createErr } = await supabase.functions.invoke('create-booking', {
         body: {
-          studio,
+          studio: resource,
           date,
           start_time: startTime,
           end_time: endTime,
           total,
-          addons,
+          addons: mode === 'studio' ? addons : [],
           email: email || null,
-          videomaker,
-          videomaker_days: videomaker ? vmDays : 0,
-          vfx_ai_seconds: videomaker && vfxOn ? vfxSec : 0,
+          videomaker: mode === 'videomaker',
+          videomaker_days: mode === 'videomaker' ? vmDays : 0,
+          vfx_ai_seconds: mode === 'videomaker' && vfxOn ? vfxSec : 0,
         },
       });
       const createRespErr = (createData as any)?.error;
@@ -252,13 +249,13 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
         return;
       }
 
-      // Studio-only booking → no deposit, no Stripe redirect.
-      if (!videomaker) {
+      // Studio bookings: confirmed immediately, no Stripe.
+      if (mode === 'studio') {
         window.location.href = `/booking-success?booking_id=${booking_id}`;
         return;
       }
 
-      // Step 2 (videomaker only): Stripe Checkout for 50% deposit of videomaker price.
+      // Videomaker: 50% deposit via Stripe.
       const { data: payData, error: payErr } = await supabase.functions.invoke('create-checkout-session', {
         body: { booking_id, payment_type: 'deposit' },
       });
@@ -305,35 +302,43 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
 
         {step === 'form' ? (
           <>
-            <h2 className="font-display uppercase text-2xl sm:text-3xl mb-1">Prenota</h2>
-            <p className="text-sm text-[#F5F1E8]/60 mb-6">Scegli sala, data e orario</p>
+            <h2 className="font-display uppercase text-2xl sm:text-3xl mb-1">
+              {mode === 'videomaker' ? 'Prenota videomaker' : 'Prenota'}
+            </h2>
+            <p className="text-sm text-[#F5F1E8]/60 mb-6">
+              {mode === 'videomaker'
+                ? 'Calendario indipendente — non blocca gli studi'
+                : 'Scegli sala, data e orario'}
+            </p>
 
-            {/* Sala */}
-            <div className="mb-5">
-              <label className="text-[10px] uppercase tracking-widest text-[#E8DCC8] mb-2 block">
-                Sala
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                {STUDIOS.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => setStudio(s.id)}
-                    className={`text-left p-4 rounded-2xl border transition-colors ${
-                      studio === s.id
-                        ? 'border-[#E8DCC8] bg-[#E8DCC8]/10'
-                        : 'border-white/10 hover:border-white/30'
-                    }`}
-                  >
-                    <div className="text-[10px] uppercase tracking-widest text-[#E8DCC8]">
-                      {s.tag}
-                    </div>
-                    <div className="font-display text-lg mt-1">{s.name}</div>
-                    <div className="text-sm mt-1 text-[#F5F1E8]/70">€{s.rate}/h</div>
-                  </button>
-                ))}
+            {/* Sala — solo studio mode */}
+            {mode === 'studio' && (
+              <div className="mb-5">
+                <label className="text-[10px] uppercase tracking-widest text-[#E8DCC8] mb-2 block">
+                  Sala
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {STUDIOS.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setStudio(s.id)}
+                      className={`text-left p-4 rounded-2xl border transition-colors ${
+                        studio === s.id
+                          ? 'border-[#E8DCC8] bg-[#E8DCC8]/10'
+                          : 'border-white/10 hover:border-white/30'
+                      }`}
+                    >
+                      <div className="text-[10px] uppercase tracking-widest text-[#E8DCC8]">
+                        {s.tag}
+                      </div>
+                      <div className="font-display text-lg mt-1">{s.name}</div>
+                      <div className="text-sm mt-1 text-[#F5F1E8]/70">€{s.rate}/h</div>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Data */}
             <div className="mb-4">
@@ -350,12 +355,14 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
               />
             </div>
 
-            {/* Studio block warning */}
+            {/* Block warning */}
             {isBlocked && (
               <div className="mb-4 p-3 rounded-xl border border-red-500/40 bg-red-500/10 flex gap-2 items-start">
                 <Lock className="w-4 h-4 text-red-300 mt-0.5 shrink-0" />
                 <div className="text-xs text-red-200">
-                  Lo studio non è disponibile in questa data.
+                  {mode === 'videomaker'
+                    ? 'Videomaker non disponibile in questa data.'
+                    : 'Lo studio non è disponibile in questa data.'}
                   {blockReason && (
                     <>
                       {' '}
@@ -415,10 +422,16 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
             </div>
 
             <div className="mb-5 min-h-[22px] text-xs">
-              {hours > 0 && !validHours && (
+              {hours > 0 && !minHoursOk && (
                 <div className="text-red-400 flex items-center gap-1.5">
                   <AlertCircle className="w-3.5 h-3.5" />
-                  Minimo 2 ore di booking (selezionate: {hours.toFixed(1)}h)
+                  Minimo 2 ore (selezionate: {hours.toFixed(1)}h)
+                </div>
+              )}
+              {minHoursOk && !maxHoursOk && (
+                <div className="text-red-400 flex items-center gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  Massimo 10 ore per il videomaker (selezionate: {hours.toFixed(1)}h)
                 </div>
               )}
               {validHours && hasConflict && (
@@ -449,127 +462,114 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
               />
             </div>
 
-            {/* Add-on */}
-            <div className="mb-5">
-              <label className="text-[10px] uppercase tracking-widest text-[#E8DCC8] mb-2 block">
-                Add-on opzionali
-              </label>
-              <div className="space-y-2">
-                {ADDONS.map((a) => (
-                  <label
-                    key={a.id}
-                    className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-colors ${
-                      addons.includes(a.id)
-                        ? 'border-[#E8DCC8]/50 bg-[#E8DCC8]/5'
-                        : 'border-white/10 hover:border-white/20'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="checkbox"
-                        checked={addons.includes(a.id)}
-                        onChange={() => toggleAddon(a.id)}
-                        className="w-4 h-4 accent-[#E8DCC8]"
-                      />
-                      <span className="text-sm">{a.name}</span>
-                    </div>
-                    <span className="text-sm text-[#F5F1E8]/60">+€{a.rate}/h</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {/* Videomaker */}
-            <div className="mb-6 rounded-2xl border border-white/10 overflow-hidden">
-              <label className="flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.02]">
-                <div className="flex items-center gap-2">
-                  <Video className="w-4 h-4 text-[#E8DCC8]" />
-                  <span className="text-sm">Aggiungi videomaker</span>
+            {/* Add-on — solo studio mode */}
+            {mode === 'studio' && (
+              <div className="mb-5">
+                <label className="text-[10px] uppercase tracking-widest text-[#E8DCC8] mb-2 block">
+                  Add-on opzionali
+                </label>
+                <div className="space-y-2">
+                  {ADDONS.map((a) => (
+                    <label
+                      key={a.id}
+                      className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-colors ${
+                        addons.includes(a.id)
+                          ? 'border-[#E8DCC8]/50 bg-[#E8DCC8]/5'
+                          : 'border-white/10 hover:border-white/20'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={addons.includes(a.id)}
+                          onChange={() => toggleAddon(a.id)}
+                          className="w-4 h-4 accent-[#E8DCC8]"
+                        />
+                        <span className="text-sm">{a.name}</span>
+                      </div>
+                      <span className="text-sm text-[#F5F1E8]/60">+€{a.rate}/h</span>
+                    </label>
+                  ))}
                 </div>
-                <input
-                  type="checkbox"
-                  checked={videomaker}
-                  onChange={(e) => setVideomaker(e.target.checked)}
-                  className="w-4 h-4 accent-[#E8DCC8]"
-                />
-              </label>
+              </div>
+            )}
 
-              {videomaker && (
-                <div className="border-t border-white/10 p-4 space-y-4 bg-black/20">
+            {/* Videomaker config — solo videomaker mode */}
+            {mode === 'videomaker' && (
+              <div className="mb-6 rounded-2xl border border-white/10 p-4 space-y-4 bg-black/20">
+                <div>
+                  <label className="text-[10px] uppercase tracking-widest text-[#E8DCC8] mb-1.5 block">
+                    Numero giorni
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={vmDays}
+                    onChange={(e) =>
+                      setVmDays(Math.max(1, Math.min(10, Number(e.target.value) || 1)))
+                    }
+                    className="w-full bg-black/40 border border-white/15 rounded-xl px-4 py-2.5"
+                  />
+                  <p className="text-[11px] text-[#F5F1E8]/55 mt-1.5">
+                    €800 primo giorno + €400 per ogni giorno successivo (max 10h/giorno)
+                  </p>
+                </div>
+
+                <label className="flex items-center justify-between cursor-pointer">
+                  <span className="text-sm">Aggiungi VFX AI</span>
+                  <input
+                    type="checkbox"
+                    checked={vfxOn}
+                    onChange={(e) => setVfxOn(e.target.checked)}
+                    className="w-4 h-4 accent-[#E8DCC8]"
+                  />
+                </label>
+
+                {vfxOn && (
                   <div>
                     <label className="text-[10px] uppercase tracking-widest text-[#E8DCC8] mb-1.5 block">
-                      Numero giorni
+                      Secondi VFX
                     </label>
                     <input
                       type="number"
-                      min={1}
-                      max={10}
-                      value={vmDays}
-                      onChange={(e) =>
-                        setVmDays(Math.max(1, Math.min(10, Number(e.target.value) || 1)))
-                      }
+                      min={4}
+                      max={15}
+                      value={vfxSec}
+                      onChange={(e) => {
+                        const v = Number(e.target.value) || 4;
+                        if (v > 15) {
+                          toast.message('Oltre 15s, quotato su richiesta');
+                          setVfxSec(15);
+                        } else {
+                          setVfxSec(Math.max(4, Math.min(15, v)));
+                        }
+                      }}
                       className="w-full bg-black/40 border border-white/15 rounded-xl px-4 py-2.5"
                     />
                     <p className="text-[11px] text-[#F5F1E8]/55 mt-1.5">
-                      €800 primo giorno + €400 per ogni giorno successivo (9:00–21:00)
+                      €200 per pacchetto 4–15s. Oltre 15s, scrivici
                     </p>
                   </div>
+                )}
 
-                  <label className="flex items-center justify-between cursor-pointer">
-                    <span className="text-sm">Aggiungi VFX AI</span>
-                    <input
-                      type="checkbox"
-                      checked={vfxOn}
-                      onChange={(e) => setVfxOn(e.target.checked)}
-                      className="w-4 h-4 accent-[#E8DCC8]"
-                    />
-                  </label>
-
-                  {vfxOn && (
-                    <div>
-                      <label className="text-[10px] uppercase tracking-widest text-[#E8DCC8] mb-1.5 block">
-                        Secondi VFX
-                      </label>
-                      <input
-                        type="number"
-                        min={4}
-                        max={15}
-                        value={vfxSec}
-                        onChange={(e) => {
-                          const v = Number(e.target.value) || 4;
-                          if (v > 15) {
-                            toast.message('Oltre 15s, quotato su richiesta');
-                            setVfxSec(15);
-                          } else {
-                            setVfxSec(Math.max(4, Math.min(15, v)));
-                          }
-                        }}
-                        className="w-full bg-black/40 border border-white/15 rounded-xl px-4 py-2.5"
-                      />
-                      <p className="text-[11px] text-[#F5F1E8]/55 mt-1.5">
-                        €200 per pacchetto 4–15s. Oltre 15s, scrivici
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="flex justify-between items-center pt-2 border-t border-white/10">
-                    <span className="text-xs uppercase tracking-widest opacity-70">
-                      Totale videomaker
-                    </span>
-                    <span className="font-display text-xl">
-                      €{videomakerPrice(vmDays, vfxOn ? vfxSec : 0)}
-                    </span>
-                  </div>
-
-                  <div className="rounded-xl bg-white/[0.03] border border-white/10 p-3 text-[11px] text-[#F5F1E8]/55 leading-relaxed">
-                    Pagamento: 50% acconto alla conferma + 50% saldo il giorno del
-                    servizio. Costi extra a carico del cliente: noleggio
-                    location/auto/attrezzatura specifica, modelle/attori/comparse,
-                    vitto/alloggio/trasferte.
-                  </div>
+                <div className="flex justify-between items-center pt-2 border-t border-white/10">
+                  <span className="text-xs uppercase tracking-widest opacity-70">
+                    Totale videomaker
+                  </span>
+                  <span className="font-display text-xl">
+                    €{videomakerPrice(vmDays, vfxOn ? vfxSec : 0)}
+                  </span>
                 </div>
-              )}
-            </div>
+
+                <div className="rounded-xl bg-white/[0.03] border border-white/10 p-3 text-[11px] text-[#F5F1E8]/55 leading-relaxed">
+                  Pagamento: 50% acconto alla conferma + 50% saldo il giorno del
+                  servizio. Costi extra a carico del cliente: noleggio
+                  location/auto/attrezzatura specifica, modelle/attori/comparse,
+                  vitto/alloggio/trasferte.
+                </div>
+              </div>
+            )}
 
             {validForm && (
               <div className="mb-6 p-4 rounded-2xl bg-[#E8DCC8]/5 border border-[#E8DCC8]/20 flex justify-between items-center">
@@ -597,14 +597,17 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
             </p>
 
             <div className="space-y-3.5 mb-6 p-5 rounded-2xl bg-black/30 border border-white/10">
-              <Row label="Sala" value={currentStudio.name} />
+              <Row
+                label="Risorsa"
+                value={mode === 'videomaker' ? 'Videomaker' : currentStudio.name}
+              />
               <Row label="Data" value={formatDateIT(date)} />
               <Row label="Orario" value={`${startTime} → ${endTime}`} />
               <Row
                 label="Durata"
                 value={`${hours.toFixed(hours % 1 === 0 ? 0 : 1)} ore`}
               />
-              {addons.length > 0 && (
+              {mode === 'studio' && addons.length > 0 && (
                 <Row
                   label="Add-on"
                   value={addons
@@ -612,9 +615,9 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
                     .join(', ')}
                 />
               )}
-              {videomaker && (
+              {mode === 'videomaker' && (
                 <Row
-                  label="Videomaker"
+                  label="Pacchetto"
                   value={`${vmDays} giorn${vmDays > 1 ? 'i' : 'o'}${
                     vfxOn ? ` · VFX ${vfxSec}s` : ''
                   }`}
@@ -636,8 +639,8 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
               className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-[#E8DCC8] text-[#0A0908] px-6 py-3.5 text-sm uppercase tracking-widest font-medium hover:bg-[#F5F1E8] transition-colors mb-3 disabled:opacity-50"
             >
               {submitting
-                ? (videomaker ? 'Reindirizzamento al pagamento…' : 'Conferma in corso…')
-                : (videomaker ? 'Paga acconto videomaker (50%)' : 'Conferma prenotazione')}
+                ? (mode === 'videomaker' ? 'Reindirizzamento al pagamento…' : 'Conferma in corso…')
+                : (mode === 'videomaker' ? 'Paga acconto videomaker (50%)' : 'Conferma prenotazione')}
               <ArrowRight className="w-4 h-4" />
             </button>
 

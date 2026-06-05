@@ -23,7 +23,8 @@ function bad(status: number, message: string) {
   });
 }
 
-const ALLOWED_STUDIOS = new Set(['piccolo', 'ssg']);
+// 'videomaker' is treated as its own resource with an independent calendar.
+const ALLOWED_STUDIOS = new Set(['piccolo', 'ssg', 'videomaker']);
 const ALLOWED_ADDONS = new Set(['producer', 'fonico']);
 
 const toMin = (t: string) => {
@@ -73,7 +74,19 @@ Deno.serve(async (req) => {
 
   const s = toMin(start_time);
   const e = toMin(end_time);
-  if (e - s < 120) return bad(400, 'Minimum 2 hours');
+  const duration = e - s;
+  if (duration < 120) return bad(400, 'Minimum 2 hours');
+
+  // Resource-specific rules.
+  const isVideomakerResource = studio === 'videomaker';
+  if (isVideomakerResource) {
+    if (!videomaker) return bad(400, 'Videomaker resource requires videomaker=true');
+    if (duration > 600) return bad(400, 'Maximum 10 hours for videomaker');
+    if (videomaker_days < 1) return bad(400, 'Invalid videomaker days');
+  } else {
+    // Studio bookings never carry videomaker billing — strip it server-side.
+    if (videomaker) return bad(400, 'Studio bookings cannot include videomaker');
+  }
 
   const ip =
     req.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
@@ -130,14 +143,14 @@ Deno.serve(async (req) => {
       start_time,
       end_time,
       total,
-      addons,
+      addons: isVideomakerResource ? [] : addons,
       email: email || null,
-      // Studio-only bookings don't require deposit → confirm immediately.
+      // Studio bookings (piccolo/ssg) confirm immediately — no deposit.
       // Videomaker bookings stay pending until Stripe deposit is paid.
-      status: videomaker ? 'pending' : 'confirmed',
-      videomaker,
-      videomaker_days,
-      vfx_ai_seconds,
+      status: isVideomakerResource ? 'pending' : 'confirmed',
+      videomaker: isVideomakerResource,
+      videomaker_days: isVideomakerResource ? videomaker_days : 0,
+      vfx_ai_seconds: isVideomakerResource ? vfx_ai_seconds : 0,
       ip_hash,
     })
     .select('id')
