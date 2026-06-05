@@ -46,23 +46,30 @@ Deno.serve(async (req) => {
 
   if (bErr || !booking) return bad(404, 'Booking not found');
 
-  // Stripe deposit/balance only applies to videomaker bookings.
-  if (!booking.videomaker) return bad(400, 'Booking does not require payment');
-
   if (payment_type === 'deposit' && booking.deposit_paid) return bad(409, 'Deposit already paid');
   if (payment_type === 'balance') {
+    if (!booking.videomaker) return bad(400, 'Balance only applies to videomaker bookings');
     if (!booking.deposit_paid) return bad(409, 'Deposit not paid yet');
     if (booking.final_paid) return bad(409, 'Balance already paid');
   }
 
-  // Videomaker price formula (mirrors frontend): 800 base + 400/extra day + 200 if any VFX seconds.
-  const days = Number(booking.videomaker_days) || 0;
-  const vfxSec = Number(booking.vfx_ai_seconds) || 0;
-  if (days <= 0) return bad(400, 'Invalid videomaker days');
-  const vmTotal = 800 + Math.max(0, days - 1) * 400 + (vfxSec > 0 ? 200 : 0);
-
-  // 50% of videomaker portion only — studio rental is NOT included.
-  const amountCents = Math.round(vmTotal * 100 * 0.5);
+  // Compute amount to charge.
+  let amountCents: number;
+  let label: string;
+  if (booking.videomaker) {
+    // Videomaker: 50% of videomaker subtotal (deposit or balance).
+    const days = Number(booking.videomaker_days) || 0;
+    const vfxSec = Number(booking.vfx_ai_seconds) || 0;
+    if (days <= 0) return bad(400, 'Invalid videomaker days');
+    const vmTotal = 800 + Math.max(0, days - 1) * 400 + (vfxSec > 0 ? 200 : 0);
+    amountCents = Math.round(vmTotal * 100 * 0.5);
+    label = `Trenches Records — ${payment_type === 'deposit' ? 'Acconto' : 'Saldo'} Videomaker`;
+  } else {
+    // Studio: 100% upfront. Balance payment_type not applicable.
+    if (payment_type !== 'deposit') return bad(400, 'Studio bookings are paid in full upfront');
+    amountCents = Math.round(Number(booking.total) * 100);
+    label = `Trenches Records — Prenotazione studio`;
+  }
   if (amountCents < 50) return bad(400, 'Amount too small');
 
 
