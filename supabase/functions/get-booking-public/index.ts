@@ -40,7 +40,7 @@ Deno.serve(async (req) => {
 
   const { data, error } = await supabase
     .from('bookings')
-    .select('id, studio, date, start_time, end_time, total, status, deposit_paid, final_paid')
+    .select('id, studio, date, start_time, end_time, total, status, deposit_paid, final_paid, videomaker, videomaker_days, vfx_ai_seconds')
     .eq('id', booking_id)
     .maybeSingle();
 
