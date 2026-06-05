@@ -13,6 +13,9 @@ type Booking = {
   status: string;
   deposit_paid: boolean;
   final_paid: boolean;
+  videomaker?: boolean;
+  videomaker_days?: number;
+  vfx_ai_seconds?: number;
 };
 
 function formatDateIT(d: string) {
