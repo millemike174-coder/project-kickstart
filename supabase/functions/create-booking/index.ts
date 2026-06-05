@@ -116,7 +116,7 @@ Deno.serve(async (req) => {
     .select('id,start_time,end_time')
     .eq('studio', studio)
     .eq('date', date)
-    .eq('status', 'confirmed');
+    .in('status', ['confirmed', 'pending']);
   if (confErr) return bad(500, 'Conflict check failed');
   const hasConflict = (conflicts ?? []).some((b: any) => {
     const bs = toMin(b.start_time);
