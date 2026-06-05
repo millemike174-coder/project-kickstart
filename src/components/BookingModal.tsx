@@ -3,8 +3,6 @@ import { X, ArrowRight, Check, AlertCircle, Video, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
-// ─── CONFIGURAZIONE PAGAMENTO ─────────────────────────────────
-const PAYMENT_URL = 'https://buy.stripe.com/PLACEHOLDER';
 
 const toMinutes = (t: string) => {
   if (!t) return 0;
@@ -210,7 +208,7 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
 
   const handlePayment = async () => {
     setSubmitting(true);
-    const { data, error } = await supabase.functions.invoke('create-booking', {
+    const { data, error } = await supabase.functions.invoke('create-checkout-session', {
       body: {
         studio,
         date,
@@ -226,22 +224,12 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
     });
     setSubmitting(false);
     const respErr = (data as any)?.error;
-    if (error || respErr) {
-      toast.error(respErr || error?.message || 'Errore salvataggio prenotazione');
+    const url = (data as any)?.url;
+    if (error || respErr || !url) {
+      toast.error(respErr || error?.message || 'Errore creazione pagamento');
       return;
     }
-    toast.success('Prenotazione salvata');
-
-    const params = new URLSearchParams({
-      studio: currentStudio.name,
-      date,
-      from: startTime,
-      to: endTime,
-      hours: hours.toString(),
-      addons: addons.join(','),
-      total: total.toFixed(2),
-    });
-    window.open(`${PAYMENT_URL}?${params.toString()}`, '_blank');
+    window.location.href = url;
   };
 
   return (

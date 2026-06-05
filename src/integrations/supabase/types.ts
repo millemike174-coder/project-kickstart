@@ -27,6 +27,7 @@ export type Database = {
           ip_hash: string | null
           start_time: string
           status: string
+          stripe_session_id: string | null
           studio: string
           total: number
           vfx_ai_seconds: number
@@ -45,6 +46,7 @@ export type Database = {
           ip_hash?: string | null
           start_time: string
           status?: string
+          stripe_session_id?: string | null
           studio: string
           total?: number
           vfx_ai_seconds?: number
@@ -63,6 +65,7 @@ export type Database = {
           ip_hash?: string | null
           start_time?: string
           status?: string
+          stripe_session_id?: string | null
           studio?: string
           total?: number
           vfx_ai_seconds?: number
