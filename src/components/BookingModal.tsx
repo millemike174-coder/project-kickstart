@@ -202,7 +202,26 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
     );
 
   const handleConfirm = () => {
-    if (!validForm) return;
+    if (!date) {
+      toast.error('Seleziona una data');
+      return;
+    }
+    if (!startTime || !endTime) {
+      toast.error('Seleziona orario di inizio e fine');
+      return;
+    }
+    if (!validHours) {
+      toast.error('Minimo 2 ore di booking');
+      return;
+    }
+    if (isBlocked) {
+      toast.error('Lo studio non è disponibile in questa data');
+      return;
+    }
+    if (hasConflict) {
+      toast.error('Questo orario è già prenotato');
+      return;
+    }
     setStep('confirm');
   };
 
@@ -556,8 +575,7 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
             <button
               type="button"
               onClick={handleConfirm}
-              disabled={!validForm}
-              className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-[#E8DCC8] text-[#0A0908] px-6 py-3.5 text-sm uppercase tracking-widest font-medium hover:bg-[#F5F1E8] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className={`w-full inline-flex items-center justify-center gap-2 rounded-full bg-[#E8DCC8] text-[#0A0908] px-6 py-3.5 text-sm uppercase tracking-widest font-medium hover:bg-[#F5F1E8] transition-colors ${validForm ? '' : 'opacity-60'}`}
             >
               Continua
               <ArrowRight className="w-4 h-4" />
