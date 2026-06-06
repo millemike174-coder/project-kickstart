@@ -176,7 +176,7 @@ Deno.serve(async (req) => {
 
   if (insErr || !inserted) return bad(500, 'Insert failed');
 
-  return new Response(JSON.stringify({ ok: true, booking_id: inserted.id }), {
+  return new Response(JSON.stringify({ ok: true, booking_id: inserted.id, total }), {
     status: 200,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
