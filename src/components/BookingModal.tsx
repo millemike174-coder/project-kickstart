@@ -147,12 +147,7 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
     let cancelled = false;
     (async () => {
       const [bookingsRes, blocksRes] = await Promise.all([
-        supabase
-          .from('bookings')
-          .select('start_time,end_time')
-          .eq('studio', resource)
-          .eq('date', date)
-          .eq('status', 'confirmed'),
+        supabase.rpc('get_busy_slots', { p_studio: resource, p_date: date }),
         supabase
           .from('studio_blocks')
           .select('start_date,end_date,reason')

@@ -48,7 +48,6 @@ Deno.serve(async (req) => {
     date,
     start_time,
     end_time,
-    total,
     addons,
     email,
     videomaker,
@@ -62,7 +61,6 @@ Deno.serve(async (req) => {
     return bad(400, 'Invalid start_time');
   if (typeof end_time !== 'string' || !/^\d{2}:\d{2}(:\d{2})?$/.test(end_time))
     return bad(400, 'Invalid end_time');
-  if (typeof total !== 'number' || total <= 0 || total > 100000) return bad(400, 'Invalid total');
   if (!Array.isArray(addons) || addons.some((a) => typeof a !== 'string' || !ALLOWED_ADDONS.has(a)))
     return bad(400, 'Invalid addons');
   if (email != null && (typeof email !== 'string' || email.length > 254)) return bad(400, 'Invalid email');
@@ -76,6 +74,7 @@ Deno.serve(async (req) => {
   const e = toMin(end_time);
   const duration = e - s;
   if (duration < 120) return bad(400, 'Minimum 2 hours');
+  const hours = duration / 60;
 
   // Resource-specific rules.
   const isVideomakerResource = studio === 'videomaker';
@@ -87,6 +86,25 @@ Deno.serve(async (req) => {
     // Studio bookings never carry videomaker billing — strip it server-side.
     if (videomaker) return bad(400, 'Studio bookings cannot include videomaker');
   }
+
+  // Authoritative server-side price calculation. The client-supplied total is
+  // ignored to prevent price manipulation.
+  const STUDIO_RATES: Record<string, number> = { piccolo: 35, ssg: 60 };
+  const ADDON_RATES: Record<string, number> = { producer: 20, fonico: 25 };
+  let total = 0;
+  if (isVideomakerResource) {
+    const days = videomaker_days;
+    total = 800 + Math.max(0, days - 1) * 400 + (vfx_ai_seconds > 0 ? 200 : 0);
+  } else {
+    const rate = STUDIO_RATES[studio] ?? 0;
+    total = rate * hours;
+    for (const a of addons) {
+      total += (ADDON_RATES[a] ?? 0) * hours;
+    }
+  }
+  total = Math.round(total * 100) / 100;
+  if (total <= 0 || total > 100000) return bad(400, 'Invalid computed total');
+
 
   const ip =
     req.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
@@ -158,7 +176,7 @@ Deno.serve(async (req) => {
 
   if (insErr || !inserted) return bad(500, 'Insert failed');
 
-  return new Response(JSON.stringify({ ok: true, booking_id: inserted.id }), {
+  return new Response(JSON.stringify({ ok: true, booking_id: inserted.id, total }), {
     status: 200,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });

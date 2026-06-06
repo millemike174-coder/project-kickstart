@@ -1,8 +1,16 @@
-// Lista email autorizzate per accedere all'area admin.
-// Per modificare gli admin, edita questo array.
-export const ADMIN_EMAILS = ['s.cristianwork@gmail.com'];
+// Admin authorization is now stored server-side in the `user_roles` table.
+// Use `useAdminAuth` (which checks the server-side role) instead of any
+// client-side email comparison.
+import { supabase } from '@/integrations/supabase/client';
 
-export function isAdminEmail(email?: string | null): boolean {
-  if (!email) return false;
-  return ADMIN_EMAILS.map((e) => e.toLowerCase()).includes(email.toLowerCase());
+export async function checkIsAdmin(userId?: string | null): Promise<boolean> {
+  if (!userId) return false;
+  const { data, error } = await supabase
+    .from('user_roles')
+    .select('role')
+    .eq('user_id', userId)
+    .eq('role', 'admin')
+    .maybeSingle();
+  if (error) return false;
+  return !!data;
 }
