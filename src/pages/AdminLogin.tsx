@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { isAdminEmail } from '@/config/admin';
+import { checkIsAdmin } from '@/config/admin';
 
 export default function AdminLogin() {
   const [email, setEmail] = useState('');
@@ -13,8 +13,9 @@ export default function AdminLogin() {
   useEffect(() => {
     supabase.auth
       .getSession()
-      .then(({ data }) => {
-        if (data.session?.user && isAdminEmail(data.session.user.email)) {
+      .then(async ({ data }) => {
+        const u = data.session?.user;
+        if (u && (await checkIsAdmin(u.id))) {
           navigate('/admin/dashboard', { replace: true });
         }
       })
@@ -30,7 +31,7 @@ export default function AdminLogin() {
         toast.error('Credenziali non valide');
         return;
       }
-      if (!isAdminEmail(data.user.email)) {
+      if (!(await checkIsAdmin(data.user.id))) {
         await supabase.auth.signOut();
         toast.error('Account non autorizzato');
         return;
@@ -43,6 +44,7 @@ export default function AdminLogin() {
       setLoading(false);
     }
   };
+
 
   return (
     <div className="min-h-screen bg-[#0A0908] text-[#F5F1E8] flex items-center justify-center px-5">
