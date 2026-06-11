@@ -3,6 +3,7 @@ import { Toaster } from "sonner";
 import Landing from "@/pages/Landing";
 import AdminLogin from "@/pages/AdminLogin";
 import AdminDashboard from "@/pages/AdminDashboard";
+import AdminResetPassword from "@/pages/AdminResetPassword";
 import StudioAvailability from "@/pages/StudioAvailability";
 import BookingSuccess from "@/pages/BookingSuccess";
 import BookingCancelled from "@/pages/BookingCancelled";
@@ -17,6 +18,7 @@ export default function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/admin/login" element={<AdminLogin />} />
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
+          <Route path="/admin/reset-password" element={<AdminResetPassword />} />
           <Route path="/admin/studios" element={<StudioAvailability />} />
           <Route path="/booking-success" element={<BookingSuccess />} />
           <Route path="/booking-cancelled" element={<BookingCancelled />} />
