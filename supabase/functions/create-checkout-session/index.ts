@@ -31,6 +31,9 @@ Deno.serve(async (req) => {
 
   try {
   const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY');
+  const webhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET');
+  console.log('[create-checkout-session] STRIPE_SECRET_KEY exists:', !!stripeSecret, 'prefix:', stripeSecret?.substring(0, 8) ?? 'undefined', 'length:', stripeSecret?.length ?? 0);
+  console.log('[create-checkout-session] STRIPE_WEBHOOK_SECRET exists:', !!webhookSecret, 'prefix:', webhookSecret?.substring(0, 6) ?? 'undefined');
   if (!stripeSecret) {
     console.warn('[create-checkout-session] STRIPE_SECRET_KEY is not set');
     return bad(500, 'Stripe non è configurato. Aggiungi STRIPE_SECRET_KEY nei segreti del backend.');
