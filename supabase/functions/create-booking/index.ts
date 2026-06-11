@@ -1,6 +1,8 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
-const ALLOWED_ORIGINS = new Set([
+// CORS: allow the custom domain, lovable.app preview/published hosts, and localhost.
+// Using wildcard since we don't use cookies/credentials — every allowed origin is covered.
+const ALLOWED_ORIGINS = [
   'https://trenchesrecords.net',
   'https://www.trenchesrecords.net',
   'https://trenchesrecord.lovable.app',
@@ -9,22 +11,13 @@ const ALLOWED_ORIGINS = new Set([
   'https://id-preview--70726a02-3309-4ee8-aa14-0c070edfb535.lovable.app',
   'http://localhost:5173',
   'http://localhost:3000',
-]);
-function buildCors(req: Request) {
-  const origin = req.headers.get('origin') || '';
-  const allow = ALLOWED_ORIGINS.has(origin) || /\.lovable\.app$/.test(new URL(origin || 'http://x').hostname || '');
-  return {
-    'Access-Control-Allow-Origin': allow ? origin : '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Vary': 'Origin',
-  } as Record<string, string>;
-}
-// Back-compat alias used throughout the file. Replaced per-request in handler.
-let corsHeaders: Record<string, string> = {
+];
+const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Vary': 'Origin',
+  'X-Allowed-Origins': ALLOWED_ORIGINS.join(','),
 };
 
 const RATE_LIMIT = 5;
