@@ -1,0 +1,1 @@
+DELETE FROM public.bookings WHERE status='pending' AND deposit_paid=false AND email='mirajmikele072@icloud.com' AND stripe_session_id IS NULL;
