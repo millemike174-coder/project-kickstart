@@ -76,6 +76,7 @@ export default function AdminDashboard() {
   const [page, setPage] = useState(0);
   const [detail, setDetail] = useState<Booking | null>(null);
   const [dayFilter, setDayFilter] = useState<string | null>(null);
+  const [showChangePwd, setShowChangePwd] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -212,6 +213,12 @@ export default function AdminDashboard() {
           >
             Studi
           </Link>
+          <button
+            onClick={() => setShowChangePwd(true)}
+            className="px-3 py-1.5 rounded-full border border-white/30 hover:border-[#E8DCC8] transition-colors"
+          >
+            Cambia password
+          </button>
           <button
             onClick={signOut}
             className="px-3 py-1.5 rounded-full bg-[#E8DCC8] text-[#0A0908] hover:bg-[#F5F1E8] transition-colors"
@@ -504,6 +511,32 @@ export default function AdminDashboard() {
             >
               Chiudi
             </button>
+          </div>
+        </div>
+      )}
+
+      {showChangePwd && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          onClick={() => setShowChangePwd(false)}
+        >
+          <div
+            className="bg-[#0F0E0C] border border-white/15 rounded-3xl p-6 max-w-md w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-display uppercase text-xl mb-1">Cambia password</h3>
+            <p className="text-xs opacity-60 mb-5">
+              Dopo l'aggiornamento dovrai accedere di nuovo.
+            </p>
+            <ChangePasswordForm
+              email={user?.email ?? ''}
+              onClose={() => setShowChangePwd(false)}
+              onSuccess={async () => {
+                setShowChangePwd(false);
+                await supabase.auth.signOut();
+                navigate('/admin/login', { replace: true });
+              }}
+            />
           </div>
         </div>
       )}
