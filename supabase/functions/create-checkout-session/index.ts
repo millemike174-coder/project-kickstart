@@ -29,8 +29,10 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return bad(405, 'Method not allowed');
 
+  try {
   const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY');
   if (!stripeSecret) {
+    console.warn('[create-checkout-session] STRIPE_SECRET_KEY is not set');
     return bad(500, 'Stripe non è configurato. Aggiungi STRIPE_SECRET_KEY nei segreti del backend.');
   }
 
