@@ -114,6 +114,7 @@ Deno.serve(async (req) => {
       metadata: { booking_id: booking.id, payment_type },
     });
   } catch (err: any) {
+    console.error('[create-checkout-session] Stripe error:', err?.message, err?.stack);
     return bad(500, `Stripe error: ${err?.message ?? 'unknown'}`);
   }
 
@@ -126,4 +127,8 @@ Deno.serve(async (req) => {
     status: 200,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
+  } catch (err: any) {
+    console.error('[create-checkout-session] Unhandled error:', err?.message, err?.stack);
+    return bad(500, `Server error: ${err?.message ?? 'unknown'}`);
+  }
 });
