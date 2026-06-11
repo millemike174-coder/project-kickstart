@@ -29,8 +29,10 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return bad(405, 'Method not allowed');
 
+  try {
   const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY');
   if (!stripeSecret) {
+    console.warn('[create-checkout-session] STRIPE_SECRET_KEY is not set');
     return bad(500, 'Stripe non è configurato. Aggiungi STRIPE_SECRET_KEY nei segreti del backend.');
   }
 
@@ -112,6 +114,7 @@ Deno.serve(async (req) => {
       metadata: { booking_id: booking.id, payment_type },
     });
   } catch (err: any) {
+    console.error('[create-checkout-session] Stripe error:', err?.message, err?.stack);
     return bad(500, `Stripe error: ${err?.message ?? 'unknown'}`);
   }
 
@@ -124,4 +127,8 @@ Deno.serve(async (req) => {
     status: 200,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
+  } catch (err: any) {
+    console.error('[create-checkout-session] Unhandled error:', err?.message, err?.stack);
+    return bad(500, `Server error: ${err?.message ?? 'unknown'}`);
+  }
 });
