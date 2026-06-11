@@ -87,6 +87,24 @@ export default function AdminLogin() {
           >
             {loading ? 'Accesso…' : 'Accedi'}
           </button>
+
+          <button
+            type="button"
+            onClick={async () => {
+              if (!email) {
+                toast.error('Inserisci la tua email per ricevere il reset');
+                return;
+              }
+              const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: `${window.location.origin}/admin/reset-password`,
+              });
+              if (error) toast.error(error.message || 'Errore invio email');
+              else toast.success('Email di reset inviata, controlla la posta');
+            }}
+            className="block w-full text-xs text-[#F5F1E8]/70 hover:text-[#F5F1E8] underline text-center"
+          >
+            Password dimenticata?
+          </button>
         </form>
 
         <Link
