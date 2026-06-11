@@ -1,9 +1,23 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
+// CORS: allow the custom domain, lovable.app preview/published hosts, and localhost.
+// Using wildcard since we don't use cookies/credentials — every allowed origin is covered.
+const ALLOWED_ORIGINS = [
+  'https://trenchesrecords.net',
+  'https://www.trenchesrecords.net',
+  'https://trenchesrecord.lovable.app',
+  'https://trenchesrecords.lovable.app',
+  'https://bright-blossom-starter.lovable.app',
+  'https://id-preview--70726a02-3309-4ee8-aa14-0c070edfb535.lovable.app',
+  'http://localhost:5173',
+  'http://localhost:3000',
+];
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Vary': 'Origin',
+  'X-Allowed-Origins': ALLOWED_ORIGINS.join(','),
 };
 
 const RATE_LIMIT = 5;
