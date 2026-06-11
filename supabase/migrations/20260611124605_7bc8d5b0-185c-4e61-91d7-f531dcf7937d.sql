@@ -1,0 +1,1 @@
+DELETE FROM public.bookings WHERE email = 'mirajmikele072@icloud.com' AND deposit_paid = false AND final_paid = false;
