@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
 
 
   const stripe = new Stripe(stripeSecret, { apiVersion: '2024-12-18.acacia' });
-  const origin = req.headers.get('origin') || 'https://bright-blossom-starter.lovable.app';
+  const origin = req.headers.get('origin') || 'https://trenchesrecords.net';
 
   let session;
   try {
