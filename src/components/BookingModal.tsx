@@ -492,32 +492,51 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
             )}
 
 
-            <div className="mb-5 min-h-[22px] text-xs">
-              {hours > 0 && !minHoursOk && (
+            <div className="mb-5 min-h-[22px] text-xs space-y-1">
+              {isSunday && (
+                <div className="text-red-400 flex items-center gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  Studio chiuso la domenica
+                </div>
+              )}
+              {!isSunday && noticeViolation && (
+                <div className="text-red-400 flex items-center gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  Producer/Sound engineer richiedono almeno 3 giorni di anticipo
+                </div>
+              )}
+              {!isSunday && startTime && endTime && !hoursInRange && (
+                <div className="text-red-400 flex items-center gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  Studio aperto solo dalle 10:00 all'01:00
+                </div>
+              )}
+              {hoursInRange && hours > 0 && !minHoursOk && (
                 <div className="text-red-400 flex items-center gap-1.5">
                   <AlertCircle className="w-3.5 h-3.5" />
                   Minimo 2 ore (selezionate: {hours.toFixed(1)}h)
                 </div>
               )}
-              {minHoursOk && !maxHoursOk && (
+              {hoursInRange && minHoursOk && !maxHoursOk && (
                 <div className="text-red-400 flex items-center gap-1.5">
                   <AlertCircle className="w-3.5 h-3.5" />
                   Massimo 10 ore per il videomaker (selezionate: {hours.toFixed(1)}h)
                 </div>
               )}
-              {validHours && hasConflict && (
+              {hoursInRange && validHours && hasConflict && (
                 <div className="text-red-400 flex items-center gap-1.5">
                   <AlertCircle className="w-3.5 h-3.5" />
                   Questo orario è già prenotato.
                 </div>
               )}
-              {validHours && !hasConflict && !isBlocked && (
+              {hoursInRange && validHours && !hasConflict && !isBlocked && !isSunday && !noticeViolation && (
                 <div className="text-[#E8DCC8] flex items-center gap-1.5">
                   <Check className="w-3.5 h-3.5" />
                   Durata: {hours.toFixed(hours % 1 === 0 ? 0 : 1)} ore
                 </div>
               )}
             </div>
+
 
             {/* Email */}
             <div className="mb-5">
