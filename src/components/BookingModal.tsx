@@ -465,6 +465,8 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
                 <input
                   type="time"
                   value={startTime}
+                  min={mode === 'studio' ? '10:00' : undefined}
+                  max={mode === 'studio' ? '23:59' : undefined}
                   onChange={(e) => setStartTime(e.target.value)}
                   className="w-full bg-black/40 border border-white/15 rounded-xl px-4 py-3 text-[#F5F1E8] focus:outline-none focus:border-[#E8DCC8] transition-colors"
                   style={{ colorScheme: 'dark' }}
@@ -483,6 +485,12 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
                 />
               </div>
             </div>
+            {mode === 'studio' && (
+              <p className="text-[11px] text-[#F5F1E8]/55 -mt-1 mb-2">
+                Studio aperto 10:00 → 01:00 (overnight ok, es. 23:00 → 01:00)
+              </p>
+            )}
+
 
             <div className="mb-5 min-h-[22px] text-xs">
               {hours > 0 && !minHoursOk && (
