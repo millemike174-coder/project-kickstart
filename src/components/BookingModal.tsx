@@ -591,6 +591,10 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
                     </label>
                   ))}
                 </div>
+                <p className="text-[11px] text-[#F5F1E8]/70 mt-2 flex items-center gap-1.5">
+                  <span className="text-[#E8DCC8]">⏱</span>
+                  Producer e Sound engineer richiedono prenotazione con almeno 3 giorni di anticipo
+                </p>
               </div>
             )}
 
