@@ -160,6 +160,17 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
     }
   }, [open]);
 
+  // Toast + reactive notice violation when addons change
+  const prevNoticeViolation = useRef(false);
+  useEffect(() => {
+    const isNoticeRequired = mode === 'studio' && addons.some((a) => a === 'producer' || a === 'fonico');
+    const violation = isNoticeRequired && !!date && date < addDaysYMD(todayRomeYMD(), 3);
+    if (violation && !prevNoticeViolation.current) {
+      toast.error('Producer e Sound engineer richiedono prenotazione con almeno 3 giorni di preavviso. Sposta la data.');
+    }
+    prevNoticeViolation.current = violation;
+  }, [addons, date, mode]);
+
   // Fetch busy slots + blocks for THIS resource on the selected date.
   // Conflicts are strictly per-resource — no cross-resource blocking.
   useEffect(() => {
