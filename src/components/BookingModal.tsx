@@ -11,18 +11,42 @@ const toMinutes = (t: string) => {
 };
 
 // Strict overlap: edge-touching (12-14 / 14-16) is allowed.
+// Handles overnight wrap: if end <= start, treat end as +24h.
 const overlaps = (
   startA: string,
   endA: string,
   startB: string,
   endB: string
 ) => {
-  const aS = toMinutes(startA);
-  const aE = toMinutes(endA);
-  const bS = toMinutes(startB);
-  const bE = toMinutes(endB);
+  let aS = toMinutes(startA);
+  let aE = toMinutes(endA);
+  let bS = toMinutes(startB);
+  let bE = toMinutes(endB);
+  if (aE <= aS) aE += 1440;
+  if (bE <= bS) bE += 1440;
   return aS < bE && aE > bS;
 };
+
+// "Today" in Europe/Rome as YYYY-MM-DD.
+function todayRomeYMD(): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Rome',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date());
+  const y = parts.find((p) => p.type === 'year')!.value;
+  const m = parts.find((p) => p.type === 'month')!.value;
+  const d = parts.find((p) => p.type === 'day')!.value;
+  return `${y}-${m}-${d}`;
+}
+function addDaysYMD(ymd: string, days: number): string {
+  const d = new Date(`${ymd}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+function isSundayYMD(ymd: string): boolean {
+  if (!ymd) return false;
+  return new Date(`${ymd}T00:00:00Z`).getUTCDay() === 0;
+}
 
 type StudioId = 'piccolo' | 'ssg';
 type ResourceId = StudioId | 'videomaker';
@@ -170,7 +194,10 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
 
   const computeHours = () => {
     if (!startTime || !endTime) return 0;
-    return (toMinutes(endTime) - toMinutes(startTime)) / 60;
+    let s = toMinutes(startTime);
+    let e = toMinutes(endTime);
+    if (mode === 'studio' && e <= s && (e === 0 || e === 60)) e += 1440;
+    return (e - s) / 60;
   };
   const hours = Math.max(0, computeHours());
 
@@ -191,8 +218,30 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
   const maxHoursOk = mode === 'videomaker' ? hours <= 10 : true;
   const validHours = minHoursOk && maxHoursOk;
 
+  // Hours-of-operation check (studios only: 10:00 → 01:00).
+  const hoursInRange = (() => {
+    if (mode !== 'studio') return true;
+    if (!startTime || !endTime) return true;
+    const sMin = toMinutes(startTime);
+    const eMin = toMinutes(endTime);
+    const startOk = sMin >= 600 && sMin <= 1439;
+    const endOkRange = (eMin >= 720 && eMin <= 1439) || eMin === 0 || eMin === 60;
+    if (!startOk || !endOkRange) return false;
+    if (eMin <= sMin && !(eMin === 0 || eMin === 60)) return false;
+    return true;
+  })();
+
+  // Sunday check (all resources).
+  const isSunday = isSundayYMD(date);
+
+  // Producer/fonico need ≥3 days notice (studios only).
+  const noticeAddonActive = mode === 'studio' && addons.some((a) => a === 'producer' || a === 'fonico');
+  const todayRome = todayRomeYMD();
+  const minDate = noticeAddonActive ? addDaysYMD(todayRome, 3) : today;
+  const noticeViolation = noticeAddonActive && !!date && date < addDaysYMD(todayRome, 3);
+
   const hasConflict =
-    !!date && !!startTime && !!endTime && validHours
+    !!date && !!startTime && !!endTime && validHours && hoursInRange
       ? busySlots.some((b) =>
           overlaps(startTime, endTime, b.start_time.slice(0, 5), b.end_time.slice(0, 5))
         )
@@ -202,22 +251,33 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
   const blockReason = blocks[0]?.reason ?? '';
 
   const validForm =
-    !!date && !!startTime && !!endTime && validHours && !hasConflict && !isBlocked;
+    !!date && !!startTime && !!endTime && validHours && hoursInRange &&
+    !hasConflict && !isBlocked && !isSunday && !noticeViolation;
 
-  const toggleAddon = (id: string) =>
-    setAddons((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
+  const toggleAddon = (id: string) => {
+    setAddons((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      const willNeedNotice = next.some((a) => a === 'producer' || a === 'fonico');
+      if (willNeedNotice && date && date < addDaysYMD(todayRomeYMD(), 3)) {
+        toast.warning('Producer/Sound engineer richiedono 3 giorni di preavviso, sposta la data');
+      }
+      return next;
+    });
+  };
 
   const handleConfirm = () => {
     if (!date) return toast.error('Seleziona una data');
+    if (isSunday) return toast.error('Studio chiuso la domenica');
     if (!startTime || !endTime) return toast.error('Seleziona orario di inizio e fine');
+    if (!hoursInRange) return toast.error("Studio aperto solo dalle 10:00 all'01:00");
     if (!minHoursOk) return toast.error('Minimo 2 ore di booking');
     if (!maxHoursOk) return toast.error('Massimo 10 ore per il videomaker');
+    if (noticeViolation) return toast.error('Producer e Sound engineer richiedono prenotazione con almeno 3 giorni di anticipo');
     if (isBlocked) return toast.error('Risorsa non disponibile in questa data');
     if (hasConflict) return toast.error('Questo orario è già prenotato');
     setStep('confirm');
   };
+
 
   const handlePayment = async () => {
     setSubmitting(true);
@@ -338,12 +398,25 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
               <input
                 type="date"
                 value={date}
-                min={today}
-                onChange={(e) => setDate(e.target.value)}
+                min={minDate}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (isSundayYMD(v)) {
+                    toast.error('Studio chiuso la domenica');
+                    setDate('');
+                    return;
+                  }
+                  setDate(v);
+                }}
                 className="w-full bg-black/40 border border-white/15 rounded-xl px-4 py-3 text-[#F5F1E8] focus:outline-none focus:border-[#E8DCC8] transition-colors"
                 style={{ colorScheme: 'dark' }}
               />
+              <p className="text-[11px] text-[#F5F1E8]/55 mt-1.5">
+                Aperto lun-sab, chiuso la domenica
+                {noticeAddonActive ? ' · Producer/Sound engineer: min 3 giorni di anticipo' : ''}
+              </p>
             </div>
+
 
             {/* Block warning */}
             {isBlocked && (
@@ -392,6 +465,8 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
                 <input
                   type="time"
                   value={startTime}
+                  min={mode === 'studio' ? '10:00' : undefined}
+                  max={mode === 'studio' ? '23:59' : undefined}
                   onChange={(e) => setStartTime(e.target.value)}
                   className="w-full bg-black/40 border border-white/15 rounded-xl px-4 py-3 text-[#F5F1E8] focus:outline-none focus:border-[#E8DCC8] transition-colors"
                   style={{ colorScheme: 'dark' }}
@@ -410,33 +485,58 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
                 />
               </div>
             </div>
+            {mode === 'studio' && (
+              <p className="text-[11px] text-[#F5F1E8]/55 -mt-1 mb-2">
+                Studio aperto 10:00 → 01:00 (overnight ok, es. 23:00 → 01:00)
+              </p>
+            )}
 
-            <div className="mb-5 min-h-[22px] text-xs">
-              {hours > 0 && !minHoursOk && (
+
+            <div className="mb-5 min-h-[22px] text-xs space-y-1">
+              {isSunday && (
+                <div className="text-red-400 flex items-center gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  Studio chiuso la domenica
+                </div>
+              )}
+              {!isSunday && noticeViolation && (
+                <div className="text-red-400 flex items-center gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  Producer/Sound engineer richiedono almeno 3 giorni di anticipo
+                </div>
+              )}
+              {!isSunday && startTime && endTime && !hoursInRange && (
+                <div className="text-red-400 flex items-center gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  Studio aperto solo dalle 10:00 all'01:00
+                </div>
+              )}
+              {hoursInRange && hours > 0 && !minHoursOk && (
                 <div className="text-red-400 flex items-center gap-1.5">
                   <AlertCircle className="w-3.5 h-3.5" />
                   Minimo 2 ore (selezionate: {hours.toFixed(1)}h)
                 </div>
               )}
-              {minHoursOk && !maxHoursOk && (
+              {hoursInRange && minHoursOk && !maxHoursOk && (
                 <div className="text-red-400 flex items-center gap-1.5">
                   <AlertCircle className="w-3.5 h-3.5" />
                   Massimo 10 ore per il videomaker (selezionate: {hours.toFixed(1)}h)
                 </div>
               )}
-              {validHours && hasConflict && (
+              {hoursInRange && validHours && hasConflict && (
                 <div className="text-red-400 flex items-center gap-1.5">
                   <AlertCircle className="w-3.5 h-3.5" />
                   Questo orario è già prenotato.
                 </div>
               )}
-              {validHours && !hasConflict && !isBlocked && (
+              {hoursInRange && validHours && !hasConflict && !isBlocked && !isSunday && !noticeViolation && (
                 <div className="text-[#E8DCC8] flex items-center gap-1.5">
                   <Check className="w-3.5 h-3.5" />
                   Durata: {hours.toFixed(hours % 1 === 0 ? 0 : 1)} ore
                 </div>
               )}
             </div>
+
 
             {/* Email */}
             <div className="mb-5">
