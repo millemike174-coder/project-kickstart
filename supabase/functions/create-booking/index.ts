@@ -46,6 +46,23 @@ const toMin = (t: string) => {
   return h * 60 + m;
 };
 
+// "Today" in Europe/Rome tz as YYYY-MM-DD.
+function todayInRome(): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Rome',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date());
+  const y = parts.find((p) => p.type === 'year')!.value;
+  const m = parts.find((p) => p.type === 'month')!.value;
+  const d = parts.find((p) => p.type === 'day')!.value;
+  return `${y}-${m}-${d}`;
+}
+function daysBetween(fromYMD: string, toYMD: string): number {
+  const a = new Date(`${fromYMD}T00:00:00Z`).getTime();
+  const b = new Date(`${toYMD}T00:00:00Z`).getTime();
+  return Math.round((b - a) / 86400000);
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return bad(405, 'Method not allowed');
