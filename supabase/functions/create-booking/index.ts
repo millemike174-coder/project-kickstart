@@ -102,13 +102,34 @@ Deno.serve(async (req) => {
     return bad(400, 'Invalid vfx_ai_seconds');
 
   const s = toMin(start_time);
-  const e = toMin(end_time);
+  let e = toMin(end_time);
+  // Studios open 10:00 → 01:00 next day. Allow overnight wrap (end <= 01:00).
+  const isVideomakerResource = studio === 'videomaker';
+  if (!isVideomakerResource) {
+    const startOk = s >= 600 && s <= 1439; // 10:00 → 23:59
+    const endOkRange = (e >= 720 && e <= 1439) || e === 0 || e === 60;
+    if (!startOk || !endOkRange) return bad(400, "Studio aperto solo dalle 10:00 all'01:00");
+    if (e <= s) {
+      if (e === 0 || e === 60) e = e + 1440;
+      else return bad(400, "Studio aperto solo dalle 10:00 all'01:00");
+    }
+  }
   const duration = e - s;
   if (duration < 120) return bad(400, 'Minimum 2 hours');
   const hours = duration / 60;
 
+  // Rule: closed on Sunday.
+  const dow = new Date(`${date}T00:00:00Z`).getUTCDay();
+  if (dow === 0) return bad(400, 'Studio chiuso la domenica');
+
+  // Rule: producer/fonico require ≥ 3 days notice (Europe/Rome).
+  const hasNoticeAddon = Array.isArray(addons) && addons.some((a: string) => a === 'producer' || a === 'fonico');
+  if (hasNoticeAddon && !isVideomakerResource) {
+    const diff = daysBetween(todayInRome(), date);
+    if (diff < 3) return bad(400, 'Producer e Sound engineer richiedono prenotazione con almeno 3 giorni di anticipo');
+  }
+
   // Resource-specific rules.
-  const isVideomakerResource = studio === 'videomaker';
   if (isVideomakerResource) {
     if (!videomaker) return bad(400, 'Videomaker resource requires videomaker=true');
     if (duration > 600) return bad(400, 'Maximum 10 hours for videomaker');
