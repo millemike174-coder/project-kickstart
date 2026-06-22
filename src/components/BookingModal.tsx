@@ -419,7 +419,7 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
                   }
                   setDate(v);
                 }}
-                className="w-full bg-black/40 border border-white/15 rounded-xl px-4 py-3 text-[#F5F1E8] focus:outline-none focus:border-[#E8DCC8] transition-colors"
+                className={`w-full bg-black/40 border rounded-xl px-4 py-3 text-[#F5F1E8] focus:outline-none focus:border-[#E8DCC8] transition-colors ${noticeViolation ? 'border-red-500' : 'border-white/15'}`}
                 style={{ colorScheme: 'dark' }}
               />
               <p className="text-[11px] text-[#F5F1E8]/55 mt-1.5">
