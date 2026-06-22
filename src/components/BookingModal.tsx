@@ -684,14 +684,17 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={handleConfirm}
-              className={`w-full inline-flex items-center justify-center gap-2 rounded-full bg-[#E8DCC8] text-[#0A0908] px-6 py-3.5 text-sm uppercase tracking-widest font-medium hover:bg-[#F5F1E8] transition-colors ${validForm ? '' : 'opacity-60'}`}
-            >
-              Continua
-              <ArrowRight className="w-4 h-4" />
-            </button>
+            <div title={!validForm && noticeViolation ? 'Sposta la data più avanti' : undefined}>
+              <button
+                type="button"
+                onClick={handleConfirm}
+                disabled={!validForm}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-[#E8DCC8] text-[#0A0908] px-6 py-3.5 text-sm uppercase tracking-widest font-medium hover:bg-[#F5F1E8] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Continua
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
           </>
         ) : (
           <>
