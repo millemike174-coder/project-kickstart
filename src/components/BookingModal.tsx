@@ -398,12 +398,25 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
               <input
                 type="date"
                 value={date}
-                min={today}
-                onChange={(e) => setDate(e.target.value)}
+                min={minDate}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (isSundayYMD(v)) {
+                    toast.error('Studio chiuso la domenica');
+                    setDate('');
+                    return;
+                  }
+                  setDate(v);
+                }}
                 className="w-full bg-black/40 border border-white/15 rounded-xl px-4 py-3 text-[#F5F1E8] focus:outline-none focus:border-[#E8DCC8] transition-colors"
                 style={{ colorScheme: 'dark' }}
               />
+              <p className="text-[11px] text-[#F5F1E8]/55 mt-1.5">
+                Aperto lun-sab, chiuso la domenica
+                {noticeAddonActive ? ' · Producer/Sound engineer: min 3 giorni di anticipo' : ''}
+              </p>
             </div>
+
 
             {/* Block warning */}
             {isBlocked && (
