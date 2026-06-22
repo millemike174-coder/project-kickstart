@@ -11,18 +11,42 @@ const toMinutes = (t: string) => {
 };
 
 // Strict overlap: edge-touching (12-14 / 14-16) is allowed.
+// Handles overnight wrap: if end <= start, treat end as +24h.
 const overlaps = (
   startA: string,
   endA: string,
   startB: string,
   endB: string
 ) => {
-  const aS = toMinutes(startA);
-  const aE = toMinutes(endA);
-  const bS = toMinutes(startB);
-  const bE = toMinutes(endB);
+  let aS = toMinutes(startA);
+  let aE = toMinutes(endA);
+  let bS = toMinutes(startB);
+  let bE = toMinutes(endB);
+  if (aE <= aS) aE += 1440;
+  if (bE <= bS) bE += 1440;
   return aS < bE && aE > bS;
 };
+
+// "Today" in Europe/Rome as YYYY-MM-DD.
+function todayRomeYMD(): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Rome',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date());
+  const y = parts.find((p) => p.type === 'year')!.value;
+  const m = parts.find((p) => p.type === 'month')!.value;
+  const d = parts.find((p) => p.type === 'day')!.value;
+  return `${y}-${m}-${d}`;
+}
+function addDaysYMD(ymd: string, days: number): string {
+  const d = new Date(`${ymd}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+function isSundayYMD(ymd: string): boolean {
+  if (!ymd) return false;
+  return new Date(`${ymd}T00:00:00Z`).getUTCDay() === 0;
+}
 
 type StudioId = 'piccolo' | 'ssg';
 type ResourceId = StudioId | 'videomaker';
