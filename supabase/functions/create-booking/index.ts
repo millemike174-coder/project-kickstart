@@ -189,8 +189,9 @@ Deno.serve(async (req) => {
     .in('status', ['confirmed', 'pending']);
   if (confErr) return bad(500, 'Conflict check failed');
   const hasConflict = (conflicts ?? []).some((b: any) => {
-    const bs = toMin(b.start_time);
-    const be = toMin(b.end_time);
+    let bs = toMin(b.start_time);
+    let be = toMin(b.end_time);
+    if (be <= bs) be += 1440; // existing overnight booking
     return s < be && e > bs;
   });
   if (hasConflict) return bad(409, 'Slot already booked');
