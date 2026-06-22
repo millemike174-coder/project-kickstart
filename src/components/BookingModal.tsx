@@ -194,7 +194,10 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
 
   const computeHours = () => {
     if (!startTime || !endTime) return 0;
-    return (toMinutes(endTime) - toMinutes(startTime)) / 60;
+    let s = toMinutes(startTime);
+    let e = toMinutes(endTime);
+    if (mode === 'studio' && e <= s && (e === 0 || e === 60)) e += 1440;
+    return (e - s) / 60;
   };
   const hours = Math.max(0, computeHours());
 
@@ -215,8 +218,30 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
   const maxHoursOk = mode === 'videomaker' ? hours <= 10 : true;
   const validHours = minHoursOk && maxHoursOk;
 
+  // Hours-of-operation check (studios only: 10:00 → 01:00).
+  const hoursInRange = (() => {
+    if (mode !== 'studio') return true;
+    if (!startTime || !endTime) return true;
+    const sMin = toMinutes(startTime);
+    const eMin = toMinutes(endTime);
+    const startOk = sMin >= 600 && sMin <= 1439;
+    const endOkRange = (eMin >= 720 && eMin <= 1439) || eMin === 0 || eMin === 60;
+    if (!startOk || !endOkRange) return false;
+    if (eMin <= sMin && !(eMin === 0 || eMin === 60)) return false;
+    return true;
+  })();
+
+  // Sunday check (all resources).
+  const isSunday = isSundayYMD(date);
+
+  // Producer/fonico need ≥3 days notice (studios only).
+  const noticeAddonActive = mode === 'studio' && addons.some((a) => a === 'producer' || a === 'fonico');
+  const todayRome = todayRomeYMD();
+  const minDate = noticeAddonActive ? addDaysYMD(todayRome, 3) : today;
+  const noticeViolation = noticeAddonActive && !!date && date < addDaysYMD(todayRome, 3);
+
   const hasConflict =
-    !!date && !!startTime && !!endTime && validHours
+    !!date && !!startTime && !!endTime && validHours && hoursInRange
       ? busySlots.some((b) =>
           overlaps(startTime, endTime, b.start_time.slice(0, 5), b.end_time.slice(0, 5))
         )
@@ -226,22 +251,33 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
   const blockReason = blocks[0]?.reason ?? '';
 
   const validForm =
-    !!date && !!startTime && !!endTime && validHours && !hasConflict && !isBlocked;
+    !!date && !!startTime && !!endTime && validHours && hoursInRange &&
+    !hasConflict && !isBlocked && !isSunday && !noticeViolation;
 
-  const toggleAddon = (id: string) =>
-    setAddons((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
+  const toggleAddon = (id: string) => {
+    setAddons((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      const willNeedNotice = next.some((a) => a === 'producer' || a === 'fonico');
+      if (willNeedNotice && date && date < addDaysYMD(todayRomeYMD(), 3)) {
+        toast.warning('Producer/Sound engineer richiedono 3 giorni di preavviso, sposta la data');
+      }
+      return next;
+    });
+  };
 
   const handleConfirm = () => {
     if (!date) return toast.error('Seleziona una data');
+    if (isSunday) return toast.error('Studio chiuso la domenica');
     if (!startTime || !endTime) return toast.error('Seleziona orario di inizio e fine');
+    if (!hoursInRange) return toast.error("Studio aperto solo dalle 10:00 all'01:00");
     if (!minHoursOk) return toast.error('Minimo 2 ore di booking');
     if (!maxHoursOk) return toast.error('Massimo 10 ore per il videomaker');
+    if (noticeViolation) return toast.error('Producer e Sound engineer richiedono prenotazione con almeno 3 giorni di anticipo');
     if (isBlocked) return toast.error('Risorsa non disponibile in questa data');
     if (hasConflict) return toast.error('Questo orario è già prenotato');
     setStep('confirm');
   };
+
 
   const handlePayment = async () => {
     setSubmitting(true);
