@@ -424,7 +424,6 @@ export default function BookingModal({ open, onClose, initialVideomaker = false 
               />
               <p className="text-[11px] text-[#F5F1E8]/55 mt-1.5">
                 Aperto lun-sab, chiuso la domenica
-                {noticeAddonActive ? ' · Producer/Sound engineer: min 3 giorni di anticipo' : ''}
               </p>
             </div>
 
