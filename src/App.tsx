@@ -8,6 +8,7 @@ import StudioAvailability from "@/pages/StudioAvailability";
 import BookingSuccess from "@/pages/BookingSuccess";
 import BookingCancelled from "@/pages/BookingCancelled";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import OAuthConsent from "@/pages/OAuthConsent";
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export default function App() {
           <Route path="/booking-cancelled" element={<BookingCancelled />} />
           <Route path="/booking/success" element={<BookingSuccess />} />
           <Route path="/booking/cancelled" element={<BookingCancelled />} />
+          <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
