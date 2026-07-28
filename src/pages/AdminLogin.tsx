@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { checkIsAdmin } from '@/config/admin';
@@ -9,18 +9,29 @@ export default function AdminLogin() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // Safe same-origin relative next path (must start with "/" but not "//").
+  const rawNext = searchParams.get('next') ?? '';
+  const nextPath = rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/admin/dashboard';
 
   useEffect(() => {
     supabase.auth
       .getSession()
       .then(async ({ data }) => {
         const u = data.session?.user;
-        if (u && (await checkIsAdmin(u.id))) {
+        if (!u) return;
+        // If a `next` was provided (e.g. OAuth consent), honour it regardless of admin role.
+        if (rawNext) {
+          window.location.replace(nextPath);
+          return;
+        }
+        if (await checkIsAdmin(u.id)) {
           navigate('/admin/dashboard', { replace: true });
         }
       })
       .catch((error) => console.error('Admin login session error', error));
-  }, [navigate]);
+  }, [navigate, rawNext, nextPath]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,6 +40,11 @@ export default function AdminLogin() {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error || !data.user) {
         toast.error('Credenziali non valide');
+        return;
+      }
+      if (rawNext) {
+        // OAuth consent (or similar) return-to flow — send them back regardless of admin role.
+        window.location.replace(nextPath);
         return;
       }
       if (!(await checkIsAdmin(data.user.id))) {
